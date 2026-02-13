@@ -46,7 +46,7 @@ export function createCircuitsRouter(deps: CircuitsDeps): Hono {
       process.env.CIRCUIT_ARTIFACT_PATH ??
       resolve(
         process.cwd(),
-        "packages/circuits/bin/eth_balance/target/eth_balance.json",
+        "../circuits/bin/eth_balance/target/eth_balance.json",
       );
 
     if (!existsSync(artifactPath)) {
