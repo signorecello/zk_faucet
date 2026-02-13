@@ -1,0 +1,13 @@
+{
+  "networks": [
+    {
+      "id": "sepolia",
+      "name": "Sepolia",
+      "chainId": 11155111,
+      "rpcUrl": "https://rpc.sepolia.org",
+      "explorerUrl": "https://sepolia.etherscan.io",
+      "enabled": true,
+      "dispensationWei": "100000000000000000"
+    }
+  ]
+}

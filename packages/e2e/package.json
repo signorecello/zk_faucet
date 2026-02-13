@@ -1,0 +1,16 @@
+{
+  "name": "@zk-faucet/e2e",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "hono": "^4.4.0",
+    "valibot": "^1.0.0",
+    "pino": "^9.2.0",
+    "viem": "^2.17.0"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}
