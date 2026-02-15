@@ -7,17 +7,16 @@ Privacy-preserving testnet faucet using ZK storage proofs. Users prove they hold
 ```bash
 bun install                # install deps
 bun run dev                # build frontend + start server (watch mode)
-bun run test               # run all tests (184 total)
+bun run test               # run all tests (173 total)
 ```
 
 ## Project Structure
 
-Bun workspaces monorepo with 6 packages:
+Bun workspaces monorepo with 5 packages:
 
 ```
 packages/
   circuits/    # Noir ZK circuits + ethereum MPT library
-  contracts/   # NullifierRegistry.sol (Hardhat + OpenZeppelin v5)
   server/      # Hono API server (Bun runtime)
   client/      # CLI tool for wallet + proof generation
   frontend/    # Vanilla TS/CSS SPA with MetaMask
@@ -29,7 +28,7 @@ packages/
 - **Runtime**: Bun (package manager, test runner, bundler)
 - **Server**: Hono + pino + valibot
 - **ZK**: Noir circuits, Barretenberg WASM verifier (UltraHonk), bb.js
-- **Blockchain**: viem, Hardhat, OpenZeppelin v5
+- **Blockchain**: viem
 - **Storage**: SQLite (bun:sqlite) for nullifiers
 
 ## Circuit: packages/circuits/
@@ -114,7 +113,6 @@ Hono API with modular proof verification.
 ### Tests
 ```bash
 cd packages/server && bun test     # 66 tests
-cd packages/contracts && npx hardhat test  # 11 tests
 cd packages/client && bun test     # 38 tests
 cd packages/e2e && bun test        # 69 tests
 ```

@@ -37,15 +37,6 @@ else
   warn "nargo not found (optional — only needed for Noir circuit development)"
 fi
 
-# Hardhat (via npx — will use local install)
-if [ -f "node_modules/.bin/hardhat" ] || command -v npx &> /dev/null; then
-  info "npx/hardhat available"
-else
-  warn "npx not found — contract compilation may not work"
-fi
-
-echo ""
-
 # ---- Install dependencies ----
 
 echo "Installing dependencies..."
@@ -63,16 +54,6 @@ else
   info ".env created from .env.example"
   warn "Edit .env to set ORIGIN_RPC_URL and FAUCET_PRIVATE_KEY before running the server"
 fi
-
-echo ""
-
-# ---- Compile contracts ----
-
-echo "Compiling Solidity contracts..."
-cd packages/contracts
-npx hardhat compile
-cd ../..
-info "Contracts compiled"
 
 echo ""
 

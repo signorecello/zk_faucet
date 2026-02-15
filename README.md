@@ -86,7 +86,6 @@ ZK Proof Generation (client-side):
 | Package | Description |
 |---------|-------------|
 | `packages/circuits` | Noir ZK circuit (`eth_balance`) with custom Ethereum MPT verification library |
-| `packages/contracts` | `NullifierRegistry.sol` -- on-chain nullifier audit trail (Ownable, OpenZeppelin v5) |
 | `packages/server` | Hono API server with real Barretenberg proof verification (Bun runtime) |
 | `packages/client` | CLI tool for wallet interaction, epoch queries, and proof generation |
 | `packages/frontend` | Vanilla TypeScript/CSS single-page app with MetaMask integration |
@@ -196,7 +195,6 @@ See `SECURITY.md` for the full audit findings, including accepted risks and thei
 
 - **[Bun](https://bun.sh/)** >= 1.1 -- package manager, runtime, test runner, bundler
 - **[Nargo](https://noir-lang.org/docs/getting_started/installation/)** >= 1.0.0-beta -- Noir compiler (for circuit compilation)
-- **Node.js** >= 18 -- required by Hardhat for contract compilation/testing
 - **An Ethereum L1 RPC URL** -- Alchemy, Infura, or any mainnet endpoint
 
 ### Installation
@@ -253,12 +251,6 @@ For circuit scripts, you also need:
 | `PRIVATE_KEY` | Circuit scripts | 0x-prefixed mainnet private key (the address to prove balance for) |
 | `ORIGIN_RPC_URL` | Circuit scripts | Ethereum mainnet RPC URL (used by `generate_prover_toml.ts`) |
 
-For contract deployment (optional):
-
-| Variable | Description |
-|----------|-------------|
-| `DEPLOYER_PRIVATE_KEY` | Deployer wallet private key |
-
 ### Compile the Circuit
 
 ```bash
@@ -267,13 +259,6 @@ nargo compile
 ```
 
 This produces `target/eth_balance.json`, required by both the server (for proof verification) and the client (for proof generation).
-
-### Compile Contracts
-
-```bash
-cd packages/contracts
-npx hardhat compile
-```
 
 ## Running the Project
 
@@ -349,7 +334,7 @@ The `claim` command performs the full flow: derive address, check balance, sign 
 
 ## Testing
 
-184 tests total across all packages.
+173 tests total across all packages.
 
 ### Run All Tests
 
@@ -366,9 +351,6 @@ cd packages/server && bun test
 # Client unit tests (38 tests)
 cd packages/client && bun test
 
-# Contract tests via Hardhat (11 tests)
-cd packages/contracts && npx hardhat test
-
 # Circuit tests via Nargo (14 tests across 2 crates)
 cd packages/circuits/bin/eth_balance && nargo test
 cd packages/circuits/lib/ethereum && nargo test
@@ -381,7 +363,6 @@ cd packages/e2e && bun test
 
 ```bash
 bun run test:unit          # Server + client tests
-bun run test:contracts     # Hardhat contract tests
 bun run test:e2e           # End-to-end tests
 ```
 
@@ -684,6 +665,10 @@ The nullifier is `poseidon2(pubkey_x, pubkey_y, epoch)` using the **recovered pu
 
 The `NullifierStore` uses SQLite with `INSERT OR IGNORE` for atomic nullifier recording. Concurrent claims with the same nullifier result in exactly one success -- the first insertion wins, and subsequent attempts return `changes === 0`. The database uses WAL journaling mode and a 5-second busy timeout.
 
+### Why Not Fully On-Chain
+
+A fully on-chain faucet (where a smart contract verifies the proof and dispenses funds) creates a chicken-and-egg problem: users need testnet gas to call the `claim()` function, but obtaining gas is the entire purpose of the faucet. Meta-transaction relayers (ERC-2771) could work around this, but they reintroduce a centralized server -- adding complexity with no real benefit. The off-chain server architecture is the natural fit: it verifies the proof and sends funds without requiring the user to have any testnet balance.
+
 ## Known Limitations
 
 These findings are documented in detail in `SECURITY.md`.
@@ -787,8 +772,6 @@ The server reads this file at startup. Ensure the faucet wallet (`FAUCET_PRIVATE
 | [Noir](https://noir-lang.org) | ZK circuit language |
 | [Barretenberg / bb.js](https://github.com/AztecProtocol/aztec-packages) | UltraHonk ZK proof backend (WASM) |
 | [viem](https://viem.sh) | Ethereum client library (RPC, signing, transactions) |
-| [Hardhat](https://hardhat.org) | Solidity development framework |
-| [OpenZeppelin v5](https://docs.openzeppelin.com/contracts/5.x/) | Smart contract libraries (Ownable) |
 | [SQLite (bun:sqlite)](https://bun.sh/docs/api/sqlite) | Nullifier persistence |
 | [pino](https://getpino.io) | Structured JSON logging |
 | [valibot](https://valibot.dev) | Schema validation for API inputs |

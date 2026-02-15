@@ -2,8 +2,8 @@
 
 **Date:** 2026-02-14
 **Auditor:** QA Engineer (automated analysis)
-**Scope:** All 6 packages in the zk_faucet monorepo
-**Test Results:** 181 tests, 0 failures, 0 skips
+**Scope:** All 5 packages in the zk_faucet monorepo
+**Test Results:** 170 tests, 0 failures, 0 skips
 
 ---
 
@@ -15,12 +15,11 @@
 |---------|-------|-------------|-----------|
 | **client** | 35 | epoch.ts, prove.ts, wallet.ts | Epoch math, input formatting, wallet signing, artifact loading |
 | **server** | 66 | nullifier-store.ts, claim route, eth-balance module, fund-dispatcher.ts | Nullifier dedup, claim API, proof verification, public input validation, fund dispatch |
-| **contracts** | 11 | NullifierRegistry.sol | On-chain nullifier recording, access control, events |
 | **e2e** | 69 | 8 test files | Full claim flow, double-claim, stale roots, invalid proofs, concurrency, malformed payloads, cross-module isolation, rate limiting, frontend API, static files |
 | **circuits** | 7 (Noir) | main.nr, account.nr, rlp.nr | u32-to-decimal, message hash, bytes32-to-field, balance check, nullifier determinism, key-to-nibbles, extract-balance, RLP decode |
 | **frontend** | 0 | (none) | No tests exist |
 
-**Total: 181 TypeScript/Solidity tests + 7 Noir circuit tests = 188 total test functions**
+**Total: 170 TypeScript tests + 7 Noir circuit tests = 177 total test functions**
 
 ### 1.2 Files With Test Coverage
 
@@ -49,7 +48,6 @@
 | `frontend/src/wallet.ts` | None | MetaMask interaction, formatBalance, hasMinBalance, generateMockNullifier untested |
 | `frontend/src/ui.ts` | None | All DOM helpers, escapeHtml, isValidAddress, formatWei untested |
 | `frontend/src/main.ts` | None | Full application logic untested |
-| `contracts/NullifierRegistry.sol` | Strong | All public functions tested with edge cases |
 | `circuits/bin/eth_balance/src/main.nr` | Moderate | Helper functions tested; main() entry point only tested via full proof generation (not in test suite) |
 | `circuits/lib/ethereum/src/mpt.nr` | Weak | Only tested via ethereum_test circuit with real proof data; no unit tests for individual functions |
 | `circuits/lib/ethereum/src/rlp.nr` | Moderate | 5 Noir tests for decode functions |
@@ -222,19 +220,7 @@ The entire frontend package (4 source files, ~790 lines of code) has zero test c
 - `statusBadgeHtml()` with unknown status values
 - `getExplorerTxUrl()` URL construction
 
-### 2.4 Contracts Package
-
-The NullifierRegistry tests are relatively thorough, but some gaps remain.
-
-**Untested scenarios:**
-- Gas cost verification for `recordNullifier()` (important for production cost estimates)
-- Re-entrancy attack surface (not applicable for this simple contract, but worth documenting)
-- Ownership transfer via `transferOwnership()` (inherited from Ownable) and subsequent `recordNullifier()` access
-- `renounceOwnership()` and verifying no one can record nullifiers afterward
-- Batch operations: recording many nullifiers in a single block
-- Event indexing: verifying the `nullifier` is properly indexed in `NullifierSpent` event
-
-### 2.5 Circuits Package
+### 2.4 Circuits Package
 
 #### Main Circuit (`circuits/bin/eth_balance/src/main.nr`)
 
@@ -278,7 +264,7 @@ The `main()` function (the actual ZK circuit entrypoint) is **never directly uni
 - `memcpy_up_to_length()` with length > dest size (should fail assert)
 - `sub_array_equals_up_to_length()` when arrays differ
 
-### 2.6 Circuit Scripts (No Tests)
+### 2.5 Circuit Scripts (No Tests)
 
 `generate_prover_toml.ts` and `prove.ts` are complex scripts (300 and 183 lines respectively) with zero test coverage.
 
@@ -372,11 +358,9 @@ The client wallet module uses `DOMAIN_MESSAGE = "zk_faucet_v1:eth-balance:nullif
 | # | Test Scenario | Target File | Rationale |
 |---|--------------|-------------|-----------|
 | L1 | **Logger creation**: verify pino configuration for production vs development | `server/test/util/logger.test.ts` | Low risk, but untested branch on NODE_ENV |
-| L2 | **Contract ownership transfer**: transferOwnership + recordNullifier with new owner | `contracts/test/NullifierRegistry.test.ts` | Inherited from OpenZeppelin, low risk |
-| L3 | **Contract renounceOwnership**: verify no one can record after renounce | `contracts/test/NullifierRegistry.test.ts` | Edge case of Ownable |
-| L4 | **Client fetchStorageProof with mocked RPC**: verify correct RPC call parameters | `client/test/wallet.test.ts` | Currently only tests function arity |
-| L5 | **generate_prover_toml.ts helper functions**: bytesToTomlArray, padLeft, padRight with edge cases | New test file | Utility functions, low risk |
-| L6 | **Frontend main.ts integration**: test init flow with mocked DOM (jsdom) | `frontend/test/main.test.ts` | Complex DOM manipulation, harder to test |
+| L2 | **Client fetchStorageProof with mocked RPC**: verify correct RPC call parameters | `client/test/wallet.test.ts` | Currently only tests function arity |
+| L3 | **generate_prover_toml.ts helper functions**: bytesToTomlArray, padLeft, padRight with edge cases | New test file | Utility functions, low risk |
+| L4 | **Frontend main.ts integration**: test init flow with mocked DOM (jsdom) | `frontend/test/main.test.ts` | Complex DOM manipulation, harder to test |
 
 ---
 
@@ -420,7 +404,7 @@ The client wallet module uses `DOMAIN_MESSAGE = "zk_faucet_v1:eth-balance:nullif
 
 ## 6. Summary
 
-The zk_faucet project has a solid test foundation with 181 passing tests. The server's claim flow, nullifier dedup, and E2E security scenarios are well-covered. However, there are significant gaps:
+The zk_faucet project has a solid test foundation with 170 passing tests. The server's claim flow, nullifier dedup, and E2E security scenarios are well-covered. However, there are significant gaps:
 
 - **StateRootOracle** (security-critical) has zero unit tests
 - **Frontend** (790 LOC) has zero tests

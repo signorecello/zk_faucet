@@ -9,10 +9,8 @@
     "build:frontend": "bun run --filter frontend build",
     "test": "bun run --filter '*' test",
     "test:unit": "bun run --filter '{server,client}' test",
-    "test:contracts": "bun run --filter contracts test",
     "test:e2e": "bun run --filter e2e test",
     "compile:circuits": "bun run --filter circuits compile",
-    "compile:contracts": "bun run --filter contracts compile",
     "setup": "bash scripts/setup.sh"
   }
 }
