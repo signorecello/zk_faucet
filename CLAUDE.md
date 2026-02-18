@@ -18,7 +18,7 @@ Bun workspaces monorepo with 4 packages:
 packages/
   circuits/    # Noir ZK circuits (uses noir-lang/eth-proofs for MPT verification)
   server/      # Hono API server (Bun runtime)
-  frontend/    # Vanilla TS/CSS SPA (Vite build, wallet integration)
+  frontend/    # React SPA (Vite + Reown AppKit for wallet, bb.js for in-browser proving)
   e2e/         # End-to-end integration tests
 ```
 
@@ -26,7 +26,7 @@ packages/
 
 - **Runtime**: Bun (package manager, test runner, bundler)
 - **Server**: Hono + pino + valibot
-- **Frontend**: Vite + vanilla TS, wagmi/core for wallet, bb.js for in-browser proving
+- **Frontend**: React 19 + Vite, Reown AppKit + wagmi for wallet, bb.js for in-browser proving
 - **ZK**: Noir circuits, Barretenberg WASM verifier (UltraHonk), bb.js
 - **Blockchain**: viem
 - **Storage**: SQLite (bun:sqlite) for nullifiers
@@ -119,13 +119,22 @@ cd packages/e2e && bun test        # 69 tests
 
 ## Frontend: packages/frontend/
 
-Vanilla TS SPA built with Vite. Wallet integration via `@wagmi/core`.
+React 19 SPA built with Vite. Wallet integration via Reown AppKit + wagmi v3.
+
+### Architecture
+- **React 19** + **wagmi v3** (React hooks) + **@tanstack/react-query**
+- **Reown AppKit** (`@reown/appkit` + `@reown/appkit-adapter-wagmi`) for wallet modal (MetaMask, WalletConnect, Coinbase, etc.)
+- **Hooks**: `useClaim`, `useProver`, `useStorageProof`, `useEpoch`, `useNetworks`
+- **Steps**: `StepContainer` (collapsible), `StepList` (orchestrator), `ConnectStep`, `ProveStep`, `ClaimStep`
+- **2-step UI**: Connect Wallet -> Generate Proof & Claim (linear step flow)
+- **Lib layer**: `api.ts`, `prove.ts`, `wallet-config.ts`
 
 ### Key Design
 - **No server RPC leak**: `ORIGIN_RPC_URL` is never exposed to the browser
-- **Wallet provider for RPC**: Balance queries use `http()` transport (chain's public RPC); `getStorageProof()` uses `custom(window.ethereum)` to route through the wallet's built-in RPC (e.g. Infura)
+- **Wallet provider for RPC**: Balance queries use `http()` transport (chain's public RPC); `getStorageProof()` uses AppKit's `walletProvider` via `useAppKitProvider('eip155')` for `eth_getProof`
 - **Origin chain from env**: `VITE_ORIGIN_CHAINID` determines which chain to connect to (no hardcoded defaults)
 - **Min balance from env**: `VITE_MIN_BALANCE_WEI` is the single source of truth for the balance threshold
+- **AppKit setup**: `wallet-config.ts` creates `WagmiAdapter` + `createAppKit` imperatively (no extra React provider needed)
 
 ### Vite Config
 - `envDir: '../..'` — loads `.env` from the monorepo root (not `packages/frontend/`)
@@ -152,6 +161,7 @@ Each package has its own `.env` file with the variables it needs:
 |----------|----------|-------------|
 | `VITE_ORIGIN_CHAINID` | **Yes** | Origin chain ID (1, 11155111, 17000) |
 | `VITE_MIN_BALANCE_WEI` | **Yes** | Minimum balance threshold in wei |
+| `VITE_REOWN_PROJECT_ID` | No | Reown project ID for WalletConnect (get from cloud.reown.com) |
 
 ### `packages/server/.env`
 | Variable | Required | Description |

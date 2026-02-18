@@ -7,8 +7,9 @@ import { createLogger } from "./util/logger";
 import { AppError } from "./util/errors";
 import { ModuleRegistry } from "./lib/modules/registry";
 import { EthBalanceModule } from "./lib/modules/eth-balance/module";
+import { initBackend } from "./lib/modules/eth-balance/verifier";
 import { NullifierStore } from "./lib/nullifier-store";
-import { FundDispatcher, type NetworkConfig } from "./lib/fund-dispatcher";
+import { FundDispatcher } from "./lib/fund-dispatcher";
 import { StateRootOracle } from "./lib/state-root-oracle";
 import { createClaimRouter } from "./routes/claim";
 import { createStatusRouter } from "./routes/status";
@@ -20,7 +21,7 @@ import {
 } from "./routes/circuits";
 
 // Load networks configuration
-import networksJson from "../../../networks.json";
+import { loadNetworks } from "./lib/networks";
 
 const config = loadConfig();
 const logger = createLogger(config.logLevel);
@@ -76,7 +77,7 @@ const dbPath = config.dbPath.startsWith("/")
 const nullifierStore = new NullifierStore(dbPath);
 
 // Fund dispatcher
-const networks: NetworkConfig[] = (networksJson as { networks: NetworkConfig[] }).networks;
+const networks = loadNetworks();
 const dispatcher = new FundDispatcher(networks, config.faucetPrivateKey, logger);
 
 // --- Build Hono app ---
@@ -165,6 +166,13 @@ oracle.start().then(() => {
   logger.info("State root oracle started");
 }).catch((err) => {
   logger.warn({ err }, "State root oracle failed to start (will retry on next interval)");
+});
+
+// Eagerly initialize Barretenberg backend to avoid cold-start delay on first claim
+initBackend().then(() => {
+  logger.info("Barretenberg UltraHonk backend initialized");
+}).catch((err) => {
+  logger.warn({ err }, "Failed to eagerly initialize Barretenberg backend (will retry on first claim)");
 });
 
 logger.info(

@@ -39,22 +39,9 @@ export interface ClaimResponse {
 
 export interface StatusResponse {
   claimId: string;
-  status: "pending" | "confirmed" | "failed";
+  status: 'pending' | 'confirmed' | 'failed';
   txHash?: string;
   network?: string;
-}
-
-export interface HealthResponse {
-  status: string;
-  uptime: number;
-  version: string;
-}
-
-export interface ApiError {
-  error: {
-    code: string;
-    message: string;
-  };
 }
 
 export interface StorageProofResponse {
@@ -70,7 +57,7 @@ export interface StorageProofResponse {
 class ApiClient {
   private baseUrl: string;
 
-  constructor(baseUrl = "") {
+  constructor(baseUrl = '') {
     this.baseUrl = baseUrl;
   }
 
@@ -78,7 +65,7 @@ class ApiClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...options,
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...options?.headers,
       },
     });
@@ -86,10 +73,10 @@ class ApiClient {
     const data = await res.json();
 
     if (!res.ok) {
-      const apiErr = data as ApiError;
+      const apiErr = data as { error: { code: string; message: string } };
       throw new ApiRequestError(
         apiErr.error?.message ?? `HTTP ${res.status}`,
-        apiErr.error?.code ?? "UNKNOWN",
+        apiErr.error?.code ?? 'UNKNOWN',
         res.status,
       );
     }
@@ -98,18 +85,18 @@ class ApiClient {
   }
 
   async getNetworks(): Promise<Network[]> {
-    const data = await this.request<{ networks: Network[] }>("/networks");
+    const data = await this.request<{ networks: Network[] }>('/networks');
     return data.networks;
   }
 
   async getModules(): Promise<Module[]> {
-    const data = await this.request<{ modules: Module[] }>("/modules");
+    const data = await this.request<{ modules: Module[] }>('/modules');
     return data.modules;
   }
 
   async submitClaim(req: ClaimRequest): Promise<ClaimResponse> {
-    return this.request<ClaimResponse>("/claim", {
-      method: "POST",
+    return this.request<ClaimResponse>('/claim', {
+      method: 'POST',
       body: JSON.stringify(req),
     });
   }
@@ -118,17 +105,12 @@ class ApiClient {
     return this.request<StatusResponse>(`/status/${encodeURIComponent(claimId)}`);
   }
 
-  async getHealth(): Promise<HealthResponse> {
-    return this.request<HealthResponse>("/health");
-  }
-
-  /** Fetch compiled circuit artifact for in-browser proof generation */
   async getCircuitArtifact(moduleId: string): Promise<any> {
     const res = await fetch(`${this.baseUrl}/circuits/${moduleId}/artifact.json`);
     if (!res.ok) {
       throw new ApiRequestError(
         `Failed to fetch circuit artifact: HTTP ${res.status}`,
-        "ARTIFACT_FETCH_FAILED",
+        'ARTIFACT_FETCH_FAILED',
         res.status,
       );
     }
@@ -142,7 +124,7 @@ export class ApiRequestError extends Error {
 
   constructor(message: string, code: string, statusCode: number) {
     super(message);
-    this.name = "ApiRequestError";
+    this.name = 'ApiRequestError';
     this.code = code;
     this.statusCode = statusCode;
   }

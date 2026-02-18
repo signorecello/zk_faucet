@@ -15,7 +15,7 @@ const CIRCUIT_ARTIFACT_PATH =
     "../../../../../circuits/bin/eth_balance/target/eth_balance.json",
   );
 
-/** Cached backend singleton -- initialized lazily on first verification. */
+/** Cached backend singleton -- initialized lazily on first verification or eagerly via initBackend(). */
 let backendInstance: UltraHonkBackend | null = null;
 
 async function getBackend(): Promise<UltraHonkBackend> {
@@ -24,6 +24,14 @@ async function getBackend(): Promise<UltraHonkBackend> {
   const circuitJson = JSON.parse(readFileSync(CIRCUIT_ARTIFACT_PATH, "utf-8"));
   backendInstance = new UltraHonkBackend(circuitJson.bytecode);
   return backendInstance;
+}
+
+/**
+ * Eagerly initialize the Barretenberg backend at startup.
+ * Call this at server boot to avoid paying the ~2-3s init cost on first claim.
+ */
+export async function initBackend(): Promise<void> {
+  await getBackend();
 }
 
 /**

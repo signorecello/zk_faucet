@@ -1,6 +1,8 @@
 import { defineConfig, searchForWorkspaceRoot } from 'vite';
+import react from '@vitejs/plugin-react-swc';
 
 export default defineConfig({
+  plugins: [react()],
   // Load .env from the monorepo root (two levels up from packages/frontend/)
   envDir: '../..',
   server: {
@@ -20,7 +22,6 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    // Output to dist/ (Vite default)
     outDir: 'dist',
   },
   optimizeDeps: {
