@@ -1,5 +1,7 @@
 # zk_faucet
 
+![zk_faucet](./img/demo.png)
+
 A privacy-preserving testnet faucet that uses zero-knowledge storage proofs to verify ETH balances on a configurable origin chain without revealing user identity.
 
 Users prove they hold sufficient ETH on the origin chain (configured via `VITE_ORIGIN_CHAINID`) by generating a ZK proof over their account's Merkle-Patricia Trie (MPT) inclusion in the state trie. The faucet server verifies the proof and sends testnet ETH to a completely separate recipient address. At no point does the server learn which address generated the proof.
