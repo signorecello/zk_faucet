@@ -6,7 +6,8 @@ Privacy-preserving testnet faucet using ZK storage proofs. Users prove they hold
 
 ```bash
 bun install                # install deps
-bun run dev                # build frontend + start server (watch mode)
+bun run build              # compile circuits + build frontend
+bun run dev                # start server (watch mode)
 bun run test               # run all tests (130 pass + 3 skip + 4 require frontend build)
 ```
 
@@ -172,6 +173,7 @@ Each package has its own `.env` file with the variables it needs:
 | `ORIGIN_RPC_URL` | **Yes** | Origin chain RPC URL (for state root verification) |
 | `FAUCET_PRIVATE_KEY` | **Yes** | 0x-prefixed private key holding testnet funds |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (default: `*`) |
+| `LOG_LEVEL` | No | Pino log level: `debug`, `info`, `warn`, `error` (default: `info`) |
 
 ### `packages/circuits/.env`
 | Variable | Required | Description |

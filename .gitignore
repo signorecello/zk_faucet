@@ -13,6 +13,9 @@ packages/frontend/public/styles.css
 packages/circuits/bin/eth_balance/target/
 packages/circuits/test/ethereum_test/target/
 
+# Cached verification key (generated on first server start)
+*.vk.bin
+
 # Environment & secrets
 .env
 .env.local

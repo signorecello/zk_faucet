@@ -5,8 +5,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run build:frontend && bun run --elide-lines 2000 --filter server dev",
+    "build": "bun run build:circuits && bun run build:frontend",
     "build:frontend": "bun run --filter frontend build",
+    "build:circuits": "cd packages/circuits/bin/eth_balance && nargo compile",
+    "dev": "bun run --elide-lines 2000 --filter server dev",
+    "start": "bun run --filter server start",
     "test": "bun run --filter '*' test",
     "test:circuits": "bun run --filter circuits test",
     "test:unit": "bun run --filter server test",

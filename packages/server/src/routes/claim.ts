@@ -21,6 +21,8 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
   const app = new Hono();
 
   app.post("/", async (c) => {
+    const t0 = performance.now();
+
     // Parse and validate the request body
     const body = await c.req.json();
     const parseResult = v.safeParse(ClaimRequestSchema, body);
@@ -30,6 +32,7 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
     }
 
     const { moduleId, proof, publicInputs, recipient, targetNetwork } = parseResult.output;
+    deps.logger.debug({ moduleId, recipient, targetNetwork }, "Claim request received");
 
     // Look up the proof module
     const module = deps.registry.get(moduleId);
@@ -45,10 +48,12 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
       nullifier: publicInputs.nullifier,
     };
 
+    const t1 = performance.now();
     const validation = await module.validatePublicInputs(pi);
     if (!validation.valid) {
       throw AppError.invalidPublicInputs(validation.error ?? "Unknown validation error");
     }
+    deps.logger.debug({ durationMs: Math.round(performance.now() - t1) }, "Public inputs validated");
 
     // Decode proof from hex
     const proofHex = proof.startsWith("0x") ? proof.slice(2) : proof;
@@ -58,9 +63,13 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
     const proofBytes = new Uint8Array(
       proofHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)),
     );
+    deps.logger.debug({ proofSize: proofBytes.length }, "Proof decoded");
 
     // Verify the ZK proof
+    const t2 = performance.now();
     const isValid = await module.verifyProof(proofBytes, pi);
+    const verifyMs = Math.round(performance.now() - t2);
+    deps.logger.info({ durationMs: verifyMs }, "Proof verification completed");
     if (!isValid) {
       throw AppError.invalidProof();
     }
@@ -72,6 +81,7 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
     }
 
     // Dispatch funds — roll back nullifier if dispatch fails (C1 fix)
+    const t3 = performance.now();
     let result: { txHash: string; claimId: string };
     try {
       result = await deps.dispatcher.dispatch(
@@ -85,6 +95,7 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
       deps.logger.error({ err, recipient, targetNetwork }, "Fund dispatch failed");
       throw AppError.dispatchFailed(message);
     }
+    deps.logger.debug({ durationMs: Math.round(performance.now() - t3), txHash: result.txHash }, "Funds dispatched");
 
     // Record claim status in SQLite
     deps.claimStore.insert({
@@ -98,9 +109,10 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
     });
 
     const network = deps.dispatcher.getNetwork(targetNetwork);
+    const totalMs = Math.round(performance.now() - t0);
 
     deps.logger.info(
-      { claimId: result.claimId, txHash: result.txHash, network: targetNetwork },
+      { claimId: result.claimId, txHash: result.txHash, network: targetNetwork, totalMs },
       "Claim successful",
     );
 

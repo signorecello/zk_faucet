@@ -187,11 +187,12 @@ oracle.start().then(() => {
   logger.warn({ err }, "State root oracle failed to start (will retry on next interval)");
 });
 
-// Eagerly initialize Barretenberg backend to avoid cold-start delay on first claim
+// Eagerly initialize verification key (loads from cache or generates once)
+const vkStart = performance.now();
 initBackend().then(() => {
-  logger.info("Barretenberg UltraHonk backend initialized");
+  logger.info({ durationMs: Math.round(performance.now() - vkStart) }, "Verification key ready");
 }).catch((err) => {
-  logger.warn({ err }, "Failed to eagerly initialize Barretenberg backend (will retry on first claim)");
+  logger.error({ err }, "Failed to initialize verification key — proof verification will fail");
 });
 
 logger.info(

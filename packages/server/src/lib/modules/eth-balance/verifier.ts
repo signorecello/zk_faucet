@@ -1,6 +1,6 @@
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
-import { UltraHonkBackend } from "@aztec/bb.js";
+import { UltraHonkBackend, UltraHonkVerifierBackend } from "@aztec/bb.js";
 import type { PublicInputs } from "../types";
 
 /**
@@ -15,27 +15,57 @@ const CIRCUIT_ARTIFACT_PATH =
     "../../../../../circuits/bin/eth_balance/target/eth_balance.json",
   );
 
-/** Cached backend singleton -- initialized lazily on first verification or eagerly via initBackend(). */
-let backendInstance: UltraHonkBackend | null = null;
+/** Path to the cached verification key (sits next to the circuit artifact). */
+const VK_CACHE_PATH = CIRCUIT_ARTIFACT_PATH.replace(/\.json$/, ".vk.bin");
 
-async function getBackend(): Promise<UltraHonkBackend> {
-  if (backendInstance) return backendInstance;
+/** Cached verification key — loaded from disk or generated once at startup. */
+let cachedVk: Uint8Array | null = null;
 
-  const circuitJson = JSON.parse(readFileSync(CIRCUIT_ARTIFACT_PATH, "utf-8"));
-  backendInstance = new UltraHonkBackend(circuitJson.bytecode);
-  return backendInstance;
+/** Lightweight verifier backend — does not need circuit bytecode. */
+let verifierInstance: UltraHonkVerifierBackend | null = null;
+
+async function getVerifier(): Promise<{ verifier: UltraHonkVerifierBackend; vk: Uint8Array }> {
+  if (verifierInstance && cachedVk) return { verifier: verifierInstance, vk: cachedVk };
+
+  verifierInstance = new UltraHonkVerifierBackend();
+  if (!cachedVk) {
+    throw new Error("Verification key not initialized — call initBackend() first");
+  }
+  return { verifier: verifierInstance, vk: cachedVk };
 }
 
 /**
- * Eagerly initialize the Barretenberg backend at startup.
- * Call this at server boot to avoid paying the ~2-3s init cost on first claim.
+ * Eagerly initialize the verification key at startup.
+ *
+ * 1. If a cached VK exists on disk, load it (instant).
+ * 2. Otherwise, spin up the heavy UltraHonkBackend to derive the VK,
+ *    cache it to disk, then tear down the backend.
+ *
+ * After this, verifyProof() uses the lightweight UltraHonkVerifierBackend
+ * which takes ~1-2s instead of ~43s.
  */
 export async function initBackend(): Promise<void> {
-  await getBackend();
+  // Try loading cached VK from disk
+  if (existsSync(VK_CACHE_PATH)) {
+    cachedVk = new Uint8Array(readFileSync(VK_CACHE_PATH));
+    verifierInstance = new UltraHonkVerifierBackend();
+    return;
+  }
+
+  // No cached VK — generate it from the circuit (slow, one-time cost)
+  const circuitJson = JSON.parse(readFileSync(CIRCUIT_ARTIFACT_PATH, "utf-8"));
+  const backend = new UltraHonkBackend(circuitJson.bytecode);
+  cachedVk = await backend.getVerificationKey();
+  await backend.destroy();
+
+  // Cache to disk for next startup
+  writeFileSync(VK_CACHE_PATH, cachedVk);
+
+  verifierInstance = new UltraHonkVerifierBackend();
 }
 
 /**
- * Verifies a ZK proof using the Barretenberg UltraHonk WASM backend.
+ * Verifies a ZK proof using the lightweight UltraHonkVerifierBackend.
  *
  * The proof attests that the prover holds >= minBalance ETH at the given
  * state root, and derives a deterministic nullifier for double-claim prevention.
@@ -45,8 +75,12 @@ export async function verifyProof(
   publicInputs: PublicInputs,
 ): Promise<boolean> {
   const publicInputFields = encodePublicInputs(publicInputs);
-  const backend = await getBackend();
-  return backend.verifyProof({ proof, publicInputs: publicInputFields });
+  const { verifier, vk } = await getVerifier();
+  return verifier.verifyProof({
+    proof,
+    publicInputs: publicInputFields,
+    verificationKey: vk,
+  });
 }
 
 /**
@@ -86,5 +120,6 @@ export function encodePublicInputs(inputs: PublicInputs): string[] {
  * Reset the cached backend (for testing).
  */
 export function resetBackend(): void {
-  backendInstance = null;
+  cachedVk = null;
+  verifierInstance = null;
 }
