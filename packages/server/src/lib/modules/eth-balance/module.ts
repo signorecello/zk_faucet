@@ -24,12 +24,12 @@ export class EthBalanceModule implements ProofModule {
   }
 
   async validatePublicInputs(inputs: PublicInputs): Promise<ValidationResult> {
-    // Verify the epoch matches the current epoch
+    // Verify the epoch is current or immediately previous (tolerance for boundary submissions)
     const currentEpoch = this.currentEpoch();
-    if (inputs.epoch !== currentEpoch) {
+    if (inputs.epoch > currentEpoch || inputs.epoch < currentEpoch - 1) {
       return {
         valid: false,
-        error: `Epoch mismatch: expected ${currentEpoch}, got ${inputs.epoch}`,
+        error: `Epoch mismatch: expected ${currentEpoch} (±1), got ${inputs.epoch}`,
       };
     }
 

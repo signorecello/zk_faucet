@@ -150,9 +150,16 @@ describe("EthBalanceModule", () => {
       expect(result.error).toContain("Epoch mismatch");
     });
 
-    test("rejects epoch one behind current", async () => {
+    test("accepts epoch one behind current (skew tolerance)", async () => {
       const inputs = validInputs();
       inputs.epoch = module.currentEpoch() - 1;
+      const result = await module.validatePublicInputs(inputs);
+      expect(result.valid).toBe(true);
+    });
+
+    test("rejects epoch two behind current", async () => {
+      const inputs = validInputs();
+      inputs.epoch = module.currentEpoch() - 2;
       const result = await module.validatePublicInputs(inputs);
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Epoch mismatch");

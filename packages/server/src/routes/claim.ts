@@ -55,10 +55,14 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
     }
     deps.logger.debug({ durationMs: Math.round(performance.now() - t1) }, "Public inputs validated");
 
-    // Decode proof from hex
+    // Decode proof from hex (bound size to prevent memory exhaustion)
+    const MAX_PROOF_BYTES = 100_000;
     const proofHex = proof.startsWith("0x") ? proof.slice(2) : proof;
     if (proofHex.length === 0) {
       throw AppError.invalidProof("Proof is empty");
+    }
+    if (proofHex.length > MAX_PROOF_BYTES * 2) {
+      throw AppError.invalidProof("Proof exceeds maximum size");
     }
     const proofBytes = new Uint8Array(
       proofHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)),
