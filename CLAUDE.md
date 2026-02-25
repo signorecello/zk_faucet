@@ -7,7 +7,7 @@ Privacy-preserving testnet faucet using ZK storage proofs. Users prove they hold
 ```bash
 bun install                # install deps
 bun run dev                # build frontend + start server (watch mode)
-bun run test               # run all tests (132 pass + 3 skip)
+bun run test               # run all tests (130 pass + 3 skip + 4 require frontend build)
 ```
 
 ## Project Structure
@@ -29,7 +29,7 @@ packages/
 - **Frontend**: React 19 + Vite, Reown AppKit + wagmi for wallet, bb.js for in-browser proving
 - **ZK**: Noir circuits, Barretenberg WASM verifier (UltraHonk), bb.js
 - **Blockchain**: viem
-- **Storage**: SQLite (bun:sqlite) for nullifiers
+- **Storage**: SQLite (bun:sqlite) for nullifiers and claim records
 
 ## Circuit: packages/circuits/
 
@@ -97,7 +97,8 @@ Hono API with modular proof verification.
 ### Key Concepts
 - **ProofModule** interface (`src/lib/modules/types.ts`): pluggable proof verification
 - **ModuleRegistry**: registers proof modules, looked up by `moduleId`
-- **NullifierStore** (`bun:sqlite`): race-safe with `INSERT OR IGNORE`
+- **NullifierStore** (`bun:sqlite`): race-safe with `INSERT OR IGNORE`, `unspend()` for rollback on dispatch failure
+- **ClaimStore** (`bun:sqlite`): persistent claim records (shares DB with NullifierStore)
 - **FundDispatcher**: sends testnet ETH via viem wallet clients
 - **StateRootOracle**: validates state roots against recent L1 blocks
 
@@ -113,8 +114,8 @@ Hono API with modular proof verification.
 
 ### Tests
 ```bash
-cd packages/server && bun test     # 66 tests
-cd packages/e2e && bun test        # 69 tests
+cd packages/server && bun test     # 68 tests (65 pass + 3 skip)
+cd packages/e2e && bun test        # 69 tests (65 pass + 4 require frontend build)
 ```
 
 ## Frontend: packages/frontend/
@@ -170,6 +171,7 @@ Each package has its own `.env` file with the variables it needs:
 | `MIN_BALANCE_WEI` | **Yes** | Minimum balance threshold in wei |
 | `ORIGIN_RPC_URL` | **Yes** | Origin chain RPC URL (for state root verification) |
 | `FAUCET_PRIVATE_KEY` | **Yes** | 0x-prefixed private key holding testnet funds |
+| `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (default: `*`) |
 
 ### `packages/circuits/.env`
 | Variable | Required | Description |

@@ -1,8 +1,9 @@
 import { describe, test, expect, beforeEach, mock, afterEach } from "bun:test";
 import { Hono } from "hono";
-import { createClaimRouter, claimRecords, type ClaimDeps } from "../../src/routes/claim";
+import { createClaimRouter, type ClaimDeps } from "../../src/routes/claim";
 import { ModuleRegistry } from "../../src/lib/modules/registry";
 import { NullifierStore } from "../../src/lib/nullifier-store";
+import { ClaimStore } from "../../src/lib/claim-store";
 import { AppError } from "../../src/util/errors";
 import type { ProofModule, PublicInputs, ValidationResult } from "../../src/lib/modules/types";
 import pino from "pino";
@@ -64,16 +65,18 @@ describe("POST /claim", () => {
   let app: Hono;
   let deps: ClaimDeps;
   let nullifierStore: NullifierStore;
+  let claimStore: ClaimStore;
 
   beforeEach(() => {
-    claimRecords.clear();
     nullifierStore = new NullifierStore(":memory:");
+    claimStore = new ClaimStore(nullifierStore.database);
     const registry = new ModuleRegistry();
     registry.register(createMockModule());
 
     deps = {
       registry,
       nullifierStore,
+      claimStore,
       dispatcher: createMockDispatcher() as any,
       logger,
     };
@@ -106,6 +109,21 @@ describe("POST /claim", () => {
     expect(body.txHash).toBe("0xtxhash");
     expect(body.claimId).toBe("0xclaim123");
     expect(body.network).toBe("sepolia");
+  });
+
+  test("valid claim is persisted in ClaimStore", async () => {
+    await app.request("/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(validClaimBody()),
+    });
+
+    const record = claimStore.get("0xclaim123");
+    expect(record).not.toBeNull();
+    expect(record!.status).toBe("confirmed");
+    expect(record!.txHash).toBe("0xtxhash");
+    expect(record!.network).toBe("sepolia");
+    expect(record!.recipient).toBe("0x" + "11".repeat(20));
   });
 
   test("invalid module returns 400", async () => {
@@ -164,7 +182,7 @@ describe("POST /claim", () => {
       body: JSON.stringify(validClaimBody()),
     });
 
-    // Second claim with same nullifier should fail
+    // Second claim with same nullifier should fail (isSpent check before dispatch)
     const res = await app.request("/claim", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -204,17 +222,21 @@ describe("POST /claim", () => {
     expect(json.error.code).toBe("INVALID_PROOF");
   });
 
-  test("dispatch failure returns 500 DISPATCH_FAILED", async () => {
+  test("dispatch failure returns 500 DISPATCH_FAILED and does not burn nullifier", async () => {
     const failingDispatcher = createMockDispatcher();
     failingDispatcher.dispatch = mock(() => Promise.reject(new Error("insufficient funds")));
 
     const registry = new ModuleRegistry();
     registry.register(createMockModule());
 
+    const localNullifierStore = new NullifierStore(":memory:");
+    const localClaimStore = new ClaimStore(localNullifierStore.database);
+
     const failApp = new Hono();
     failApp.route("/claim", createClaimRouter({
       registry,
-      nullifierStore,
+      nullifierStore: localNullifierStore,
+      claimStore: localClaimStore,
       dispatcher: failingDispatcher as any,
       logger,
     }));
@@ -232,6 +254,49 @@ describe("POST /claim", () => {
     expect(res.status).toBe(500);
     const json = await res.json();
     expect(json.error.code).toBe("DISPATCH_FAILED");
+
+    // C1: nullifier should NOT be spent when dispatch fails (rolled back)
+    const isSpent = localNullifierStore.isSpent("eth-balance", "0x" + "cd".repeat(32));
+    expect(isSpent).toBe(false);
+
+    // C1: user can retry after dispatch failure
+    const retryDispatcher = createMockDispatcher();
+    const retryApp = new Hono();
+    retryApp.route("/claim", createClaimRouter({
+      registry,
+      nullifierStore: localNullifierStore,
+      claimStore: localClaimStore,
+      dispatcher: retryDispatcher as any,
+      logger,
+    }));
+    retryApp.onError((err, c) => {
+      if (err instanceof AppError) return c.json(err.toJSON(), err.statusCode as any);
+      return c.json({ error: { code: "INTERNAL_ERROR", message: err.message } }, 500);
+    });
+
+    const retryRes = await retryApp.request("/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(validClaimBody()),
+    });
+
+    expect(retryRes.status).toBe(200);
+
+    localNullifierStore.close();
+  });
+
+  test("zero address recipient returns 400", async () => {
+    const body = validClaimBody();
+    body.recipient = "0x" + "00".repeat(20);
+    const res = await app.request("/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error.code).toBe("INVALID_PUBLIC_INPUTS");
   });
 
   test("recipient with wrong length returns 400", async () => {

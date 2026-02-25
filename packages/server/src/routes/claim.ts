@@ -5,28 +5,17 @@ import { AppError } from "../util/errors";
 import type { ModuleRegistry } from "../lib/modules/registry";
 import type { NullifierStore } from "../lib/nullifier-store";
 import type { FundDispatcher } from "../lib/fund-dispatcher";
+import type { ClaimStore } from "../lib/claim-store";
 import type { Logger } from "../util/logger";
 import type { PublicInputs } from "../lib/modules/types";
 
 export interface ClaimDeps {
   registry: ModuleRegistry;
   nullifierStore: NullifierStore;
+  claimStore: ClaimStore;
   dispatcher: FundDispatcher;
   logger: Logger;
 }
-
-/** In-memory claim status tracking */
-export interface ClaimRecord {
-  claimId: string;
-  status: "pending" | "confirmed" | "failed";
-  txHash?: string;
-  network?: string;
-  moduleId?: string;
-  recipient?: string;
-  createdAt: number;
-}
-
-export const claimRecords = new Map<string, ClaimRecord>();
 
 export function createClaimRouter(deps: ClaimDeps): Hono {
   const app = new Hono();
@@ -76,13 +65,13 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
       throw AppError.invalidProof();
     }
 
-    // Check and record nullifier
+    // Atomically check and record nullifier (prevents concurrent double-spend)
     const spent = deps.nullifierStore.spend(moduleId, publicInputs.nullifier, publicInputs.epoch, recipient);
     if (!spent) {
       throw AppError.alreadyClaimed();
     }
 
-    // Dispatch funds
+    // Dispatch funds — roll back nullifier if dispatch fails (C1 fix)
     let result: { txHash: string; claimId: string };
     try {
       result = await deps.dispatcher.dispatch(
@@ -90,13 +79,15 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
         recipient as `0x${string}`,
       );
     } catch (err) {
+      // Roll back the nullifier so the user can retry
+      deps.nullifierStore.unspend(moduleId, publicInputs.nullifier);
       const message = err instanceof Error ? err.message : String(err);
       deps.logger.error({ err, recipient, targetNetwork }, "Fund dispatch failed");
       throw AppError.dispatchFailed(message);
     }
 
-    // Record claim status
-    claimRecords.set(result.claimId, {
+    // Record claim status in SQLite
+    deps.claimStore.insert({
       claimId: result.claimId,
       status: "confirmed",
       txHash: result.txHash,

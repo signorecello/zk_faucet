@@ -127,14 +127,13 @@ describe("Malformed and adversarial payloads", () => {
     expect(res.status).toBe(400);
   });
 
-  test("recipient as zero address (valid format) is accepted", async () => {
+  test("recipient as zero address is rejected", async () => {
     const body = claimBody(server.currentEpoch, {
       recipient: "0x0000000000000000000000000000000000000000",
     });
     const res = await postClaim(server.baseUrl, body);
-    // Zero address has valid format - the server should accept it
-    // (whether to actually send funds to zero address is a policy decision)
-    expect(res.status).toBe(200);
+    // C2: zero address is explicitly rejected to prevent burning funds
+    expect(res.status).toBe(400);
   });
 
   test("prototype pollution attempt in JSON body", async () => {

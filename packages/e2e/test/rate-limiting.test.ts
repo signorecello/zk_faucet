@@ -3,7 +3,8 @@ import { Hono } from "hono";
 import { ModuleRegistry } from "../../server/src/lib/modules/registry";
 import { EthBalanceModule } from "../../server/src/lib/modules/eth-balance/module";
 import { NullifierStore } from "../../server/src/lib/nullifier-store";
-import { createClaimRouter, claimRecords } from "../../server/src/routes/claim";
+import { createClaimRouter } from "../../server/src/routes/claim";
+import { ClaimStore } from "../../server/src/lib/claim-store";
 import { AppError } from "../../server/src/util/errors";
 import { claimBody, uniqueNullifier, getValidStateRoot } from "./helpers/fixtures";
 
@@ -67,6 +68,7 @@ function buildRateLimitedServer() {
   registry.register(module);
 
   const nullifierStore = new NullifierStore(":memory:");
+  const claimStore = new ClaimStore(nullifierStore.database);
   const dispatcher = new MockFundDispatcher();
   const rateLimitMap = new Map<string, RateLimitEntry>();
 
@@ -102,7 +104,7 @@ function buildRateLimitedServer() {
   });
 
   app.route("/claim", createClaimRouter({
-    registry, nullifierStore, dispatcher: dispatcher as any, logger: noopLogger,
+    registry, nullifierStore, claimStore, dispatcher: dispatcher as any, logger: noopLogger,
   }));
 
   const server = Bun.serve({ port: 0, fetch: app.fetch });
@@ -111,7 +113,7 @@ function buildRateLimitedServer() {
   return {
     baseUrl,
     currentEpoch: module.currentEpoch(),
-    close: () => { server.stop(true); nullifierStore.close(); claimRecords.clear(); },
+    close: () => { server.stop(true); nullifierStore.close(); },
   };
 }
 

@@ -8,6 +8,7 @@ export const HexSchema = v.pipe(
 export const AddressSchema = v.pipe(
   v.string(),
   v.regex(/^0x[0-9a-fA-F]{40}$/, "Must be a valid Ethereum address (0x + 40 hex chars)"),
+  v.check((val) => val.toLowerCase() !== "0x" + "0".repeat(40), "Zero address is not allowed"),
 );
 
 export const PublicInputsSchema = v.object({

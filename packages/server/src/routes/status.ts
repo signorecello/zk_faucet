@@ -1,13 +1,17 @@
 import { Hono } from "hono";
-import { claimRecords } from "./claim";
+import type { ClaimStore } from "../lib/claim-store";
 import { AppError } from "../util/errors";
 
-export function createStatusRouter(): Hono {
+export interface StatusDeps {
+  claimStore: ClaimStore;
+}
+
+export function createStatusRouter(deps: StatusDeps): Hono {
   const app = new Hono();
 
   app.get("/:claimId", (c) => {
     const claimId = c.req.param("claimId");
-    const record = claimRecords.get(claimId);
+    const record = deps.claimStore.get(claimId);
 
     if (!record) {
       throw AppError.notFound(`Claim ${claimId}`);

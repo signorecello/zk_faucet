@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
 import { createPublicClient, http } from "viem";
 import { mainnet, sepolia, holesky } from "viem/chains";
@@ -9,6 +10,7 @@ import { ModuleRegistry } from "./lib/modules/registry";
 import { EthBalanceModule } from "./lib/modules/eth-balance/module";
 import { initBackend } from "./lib/modules/eth-balance/verifier";
 import { NullifierStore } from "./lib/nullifier-store";
+import { ClaimStore } from "./lib/claim-store";
 import { FundDispatcher } from "./lib/fund-dispatcher";
 import { StateRootOracle } from "./lib/state-root-oracle";
 import { createClaimRouter } from "./routes/claim";
@@ -34,6 +36,17 @@ interface RateLimitEntry {
 }
 
 const rateLimitMap = new Map<string, RateLimitEntry>();
+
+// C4: Periodically evict expired rate limit entries to prevent unbounded growth
+const rateLimitCleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap) {
+    if (now >= entry.resetAt) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, 60_000);
+rateLimitCleanupInterval.unref();
 
 function getRateLimitKey(c: { req: { header: (name: string) => string | undefined } }): string {
   return (
@@ -75,6 +88,7 @@ const dbPath = config.dbPath.startsWith("/")
   ? config.dbPath
   : resolve(import.meta.dir, "../../..", config.dbPath);
 const nullifierStore = new NullifierStore(dbPath);
+const claimStore = new ClaimStore(nullifierStore.database);
 
 // Fund dispatcher
 const networks = loadNetworks();
@@ -82,6 +96,11 @@ const dispatcher = new FundDispatcher(networks, config.faucetPrivateKey, logger)
 
 // --- Build Hono app ---
 const app = new Hono();
+
+// CORS middleware
+app.use("*", cors({
+  origin: config.allowedOrigins.includes("*") ? "*" : config.allowedOrigins,
+}));
 
 // COOP/COEP headers for multi-threaded WASM (required by @aztec/bb.js SharedArrayBuffer)
 app.use("*", async (c, next) => {
@@ -129,8 +148,8 @@ app.onError((err, c) => {
 });
 
 // Mount routes
-app.route("/claim", createClaimRouter({ registry, nullifierStore, dispatcher, logger }));
-app.route("/status", createStatusRouter());
+app.route("/claim", createClaimRouter({ registry, nullifierStore, claimStore, dispatcher, logger }));
+app.route("/status", createStatusRouter({ claimStore }));
 app.route("/modules", createModulesRouter({ registry, dispatcher, startTime }));
 app.route("/circuits", createCircuitsRouter({ registry, dispatcher, startTime }));
 app.route("/networks", createNetworksRouter({ registry, dispatcher, startTime }));

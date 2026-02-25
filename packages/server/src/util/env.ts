@@ -11,6 +11,7 @@ export interface ServerConfig {
   epochDuration: number;
   minBalanceWei: bigint;
   dbPath: string;
+  allowedOrigins: string[];
 }
 
 function requireEnv(name: string): string {
@@ -49,5 +50,9 @@ export function loadConfig(): ServerConfig {
     epochDuration: parseInt(optionalEnv("EPOCH_DURATION", "604800"), 10),
     minBalanceWei: BigInt(requireEnv("MIN_BALANCE_WEI")),
     dbPath: optionalEnv("DB_PATH", "./data/nullifiers.db"),
+    allowedOrigins: optionalEnv("ALLOWED_ORIGINS", "*")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   };
 }

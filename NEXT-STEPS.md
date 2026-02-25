@@ -1,6 +1,6 @@
 # Next Steps: Production Readiness
 
-Last updated: 2026-02-15
+Last updated: 2026-02-25
 
 This document outlines what remains before zk_faucet can be deployed to production. Items are ordered by priority within each section. Each item references specific files and lines where changes are needed.
 
@@ -8,51 +8,29 @@ This document outlines what remains before zk_faucet can be deployed to producti
 
 ## 1. Critical -- Must-Fix Before Any Deployment
 
-### C1. Nullifier is burned when fund dispatch fails
+### ~~C1. Nullifier is burned when fund dispatch fails~~ FIXED
 
-**File:** `packages/server/src/routes/claim.ts`, lines 79-96
+**Fixed in:** `packages/server/src/routes/claim.ts`, `packages/server/src/lib/nullifier-store.ts`
 
-The nullifier is recorded in SQLite (line 80) *before* the fund dispatch (line 88). If `dispatcher.dispatch()` throws (RPC error, insufficient faucet balance, nonce collision), the nullifier is permanently spent but the user received nothing. They cannot retry until the next epoch (1 week).
+Nullifier is now recorded atomically via `spend()` (preserving concurrent duplicate rejection), then rolled back via `unspend()` if `dispatch()` throws. Users can retry after a dispatch failure.
 
-**Fix:** Either (a) wrap the nullifier spend + dispatch in a transaction and roll back on dispatch failure, or (b) move the nullifier spend to *after* a successful dispatch (accepting a small double-claim race window), or (c) implement a retry mechanism that allows re-submission with the same nullifier if the claim status is "failed".
+### ~~C2. Zero-address recipient accepted~~ FIXED
 
-```typescript
-// Option (c) sketch -- in claim.ts:
-const existingClaim = claimRecords.get(/* lookup by nullifier */);
-if (existingClaim && existingClaim.status === "failed") {
-  // Allow retry: delete old nullifier, re-attempt
-}
-```
+**Fixed in:** `packages/server/src/util/schemas.ts`
 
-### C2. Zero-address recipient accepted
+`AddressSchema` now includes a `v.check()` pipe step rejecting the zero address.
 
-**File:** `packages/server/src/util/schemas.ts` (AddressSchema) and `packages/server/src/routes/claim.ts`
+### ~~C3. Claim records stored only in memory~~ FIXED
 
-The server accepts `0x0000000000000000000000000000000000000000` as a valid recipient. Sending testnet ETH to the zero address permanently burns faucet funds.
+**Fixed in:** `packages/server/src/lib/claim-store.ts` (new), `packages/server/src/routes/claim.ts`, `packages/server/src/routes/status.ts`, `packages/server/src/index.ts`
 
-**Fix:** Add a zero-address check in the `AddressSchema` or at the start of the claim handler:
+Claim records are now stored in a `claims` SQLite table via `ClaimStore`, sharing the same database as `NullifierStore`. The in-memory `claimRecords` Map and `ClaimRecord` type were removed from `claim.ts`. The `NullifierStore.database` property is exposed as `readonly` so `ClaimStore` can share the connection.
 
-```typescript
-if (recipient === "0x0000000000000000000000000000000000000000") {
-  throw AppError.invalidPublicInputs("Cannot send to zero address");
-}
-```
+### ~~C4. Rate limiter stored only in memory and not cleaned up~~ FIXED (cleanup added)
 
-### C3. Claim records stored only in memory
+**Fixed in:** `packages/server/src/index.ts`
 
-**File:** `packages/server/src/routes/claim.ts`, line 29
-
-`claimRecords` is a `Map<string, ClaimRecord>` that lives in process memory. A server restart loses all claim history. Users cannot look up past claims via `/status/:claimId`.
-
-**Fix:** Store claim records in the existing SQLite database alongside nullifiers. Add a `claims` table with columns: `claim_id`, `status`, `tx_hash`, `network`, `module_id`, `recipient`, `created_at`.
-
-### C4. Rate limiter stored only in memory and not cleaned up
-
-**File:** `packages/server/src/index.ts`, lines 30-35
-
-The `rateLimitMap` is an in-memory `Map` with no eviction. Over time, entries for every unique IP accumulate without cleanup. Additionally, a server restart resets all rate limits.
-
-**Fix:** Add periodic cleanup of expired entries (e.g., every 60 seconds, delete entries where `now >= entry.resetAt`). For production resilience, consider using Redis or the SQLite database.
+A 60-second cleanup interval now evicts expired rate limit entries. Uses `.unref()` so it won't prevent process exit. The rate limiter is still in-memory (acceptable for single-instance deployments; Redis is a future enhancement for multi-instance).
 
 ### C5. Server hardcodes `mainnet` chain for L1 client
 
@@ -68,18 +46,11 @@ const chainMap = { 1: mainnet, 11155111: sepolia, 17000: holesky };
 const originChain = chainMap[config.originChainId];
 ```
 
-### C6. No CORS configuration
+### ~~C6. No CORS configuration~~ FIXED
 
-**File:** `packages/server/src/index.ts`
+**Fixed in:** `packages/server/src/index.ts`, `packages/server/src/util/env.ts`
 
-The server has no CORS middleware. If the frontend is served from a different origin (e.g., a CDN or separate domain), all API calls will fail. Even with same-origin serving, explicit CORS headers are a defense-in-depth measure.
-
-**Fix:** Add Hono's CORS middleware with a restrictive `origin` whitelist:
-
-```typescript
-import { cors } from "hono/cors";
-app.use("*", cors({ origin: config.allowedOrigins }));
-```
+CORS middleware added via `hono/cors`. Origins configured via `ALLOWED_ORIGINS` env var (comma-separated), defaulting to `"*"` for dev.
 
 ---
 

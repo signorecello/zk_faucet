@@ -2,7 +2,8 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { Hono } from "hono";
 import { ModuleRegistry } from "../../server/src/lib/modules/registry";
 import { NullifierStore } from "../../server/src/lib/nullifier-store";
-import { createClaimRouter, claimRecords } from "../../server/src/routes/claim";
+import { createClaimRouter } from "../../server/src/routes/claim";
+import { ClaimStore } from "../../server/src/lib/claim-store";
 import { AppError } from "../../server/src/util/errors";
 import type { ProofModule, PublicInputs, ValidationResult } from "../../server/src/lib/modules/types";
 import { getValidStateRoot, getValidProof, TEST_RECIPIENT, TEST_NETWORK, MIN_BALANCE_WEI, uniqueNullifier } from "./helpers/fixtures";
@@ -68,6 +69,7 @@ describe("Cross-module nullifier isolation", () => {
     registry.register(moduleB);
 
     nullifierStore = new NullifierStore(":memory:");
+    const claimStore = new ClaimStore(nullifierStore.database);
     const dispatcher = new MockFundDispatcher();
 
     const app = new Hono();
@@ -76,7 +78,7 @@ describe("Cross-module nullifier isolation", () => {
       return c.json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } }, 500);
     });
     app.route("/claim", createClaimRouter({
-      registry, nullifierStore, dispatcher: dispatcher as any, logger: noopLogger,
+      registry, nullifierStore, claimStore, dispatcher: dispatcher as any, logger: noopLogger,
     }));
 
     bunServer = Bun.serve({ port: 0, fetch: app.fetch });
@@ -87,7 +89,6 @@ describe("Cross-module nullifier isolation", () => {
   afterAll(() => {
     bunServer.stop(true);
     nullifierStore.close();
-    claimRecords.clear();
   });
 
   function makeClaimBody(moduleId: string, nullifier: string) {

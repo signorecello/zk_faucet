@@ -19,8 +19,9 @@ import { Hono } from "hono";
 import { ModuleRegistry } from "../../../server/src/lib/modules/registry";
 import { EthBalanceModule } from "../../../server/src/lib/modules/eth-balance/module";
 import { NullifierStore } from "../../../server/src/lib/nullifier-store";
-import { createClaimRouter, claimRecords } from "../../../server/src/routes/claim";
+import { createClaimRouter } from "../../../server/src/routes/claim";
 import { createStatusRouter } from "../../../server/src/routes/status";
+import { ClaimStore } from "../../../server/src/lib/claim-store";
 import { AppError } from "../../../server/src/util/errors";
 import { getValidStateRoot, HAS_REAL_FIXTURE } from "./fixtures";
 
@@ -143,6 +144,7 @@ export function startTestServer(): TestServer {
   registry.register(module);
 
   const nullifierStore = new NullifierStore(":memory:");
+  const claimStore = new ClaimStore(nullifierStore.database);
   const dispatcher = new MockFundDispatcher();
 
   // Build Hono app
@@ -165,11 +167,12 @@ export function startTestServer(): TestServer {
     createClaimRouter({
       registry,
       nullifierStore,
+      claimStore,
       dispatcher: dispatcher as any,
       logger: noopLogger,
     }),
   );
-  app.route("/status", createStatusRouter());
+  app.route("/status", createStatusRouter({ claimStore }));
 
   // Start on port 0 to get a random available port
   const server = Bun.serve({
@@ -187,7 +190,6 @@ export function startTestServer(): TestServer {
     close: () => {
       server.stop(true);
       nullifierStore.close();
-      claimRecords.clear();
     },
   };
 }

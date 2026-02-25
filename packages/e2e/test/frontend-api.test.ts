@@ -4,8 +4,9 @@ import { serveStatic } from "hono/bun";
 import { ModuleRegistry } from "../../server/src/lib/modules/registry";
 import { EthBalanceModule } from "../../server/src/lib/modules/eth-balance/module";
 import { NullifierStore } from "../../server/src/lib/nullifier-store";
-import { createClaimRouter, claimRecords } from "../../server/src/routes/claim";
+import { createClaimRouter } from "../../server/src/routes/claim";
 import { createStatusRouter } from "../../server/src/routes/status";
+import { ClaimStore } from "../../server/src/lib/claim-store";
 import {
   createModulesRouter,
   createNetworksRouter,
@@ -104,6 +105,7 @@ function startFullTestServer(): FullTestServer {
   registry.register(module);
 
   const nullifierStore = new NullifierStore(":memory:");
+  const claimStore = new ClaimStore(nullifierStore.database);
   const dispatcher = new MockFundDispatcher();
   const startTime = Date.now();
 
@@ -122,9 +124,9 @@ function startFullTestServer(): FullTestServer {
 
   // Mount API routes
   app.route("/claim", createClaimRouter({
-    registry, nullifierStore, dispatcher: dispatcher as any, logger: noopLogger,
+    registry, nullifierStore, claimStore, dispatcher: dispatcher as any, logger: noopLogger,
   }));
-  app.route("/status", createStatusRouter());
+  app.route("/status", createStatusRouter({ claimStore }));
   app.route("/modules", createModulesRouter({ registry, dispatcher: dispatcher as any, startTime }));
   app.route("/networks", createNetworksRouter({ registry, dispatcher: dispatcher as any, startTime }));
   app.route("/health", createHealthRouter({ registry, dispatcher: dispatcher as any, startTime }));
@@ -150,7 +152,6 @@ function startFullTestServer(): FullTestServer {
     close: () => {
       server.stop(true);
       nullifierStore.close();
-      claimRecords.clear();
     },
   };
 }
