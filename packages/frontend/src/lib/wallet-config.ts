@@ -39,8 +39,8 @@ console.log(
 const DOMAIN_MESSAGE_PREFIX = 'zk_faucet_v1:eth-balance:nullifier_seed:';
 const EPOCH_PAD_LENGTH = 10;
 
-/** Epoch duration in seconds: 1 week */
-export const EPOCH_DURATION_SECONDS = 604_800;
+/** Epoch duration in seconds: 1 day */
+export const EPOCH_DURATION_SECONDS = 86_400;
 
 /** Build the domain message for a given epoch */
 export function buildDomainMessage(epoch: number): string {

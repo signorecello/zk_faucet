@@ -1,9 +1,9 @@
+import { formatEther } from 'viem';
 import type { ClaimResponse, Network } from '../../lib/api';
 import { ResultCard } from '../ResultCard';
 
 function formatWei(wei: string): string {
-  const eth = Number(BigInt(wei)) / 1e18;
-  return eth.toFixed(4) + ' ETH';
+  return Number(formatEther(BigInt(wei))).toFixed(4) + ' ETH';
 }
 
 interface ClaimStepProps {

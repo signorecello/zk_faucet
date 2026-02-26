@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
+import { createHash } from "crypto";
 import type { ModuleRegistry } from "../lib/modules/registry";
 import type { FundDispatcher } from "../lib/fund-dispatcher";
 import { AppError } from "../util/errors";
@@ -31,6 +32,10 @@ export function createModulesRouter(deps: CircuitsDeps): Hono {
 export function createCircuitsRouter(deps: CircuitsDeps): Hono {
   const app = new Hono();
 
+  // H8: Cache parsed artifact and ETag in closure
+  let cachedArtifact: string | null = null;
+  let cachedEtag: string | null = null;
+
   app.get("/:moduleId/artifact.json", (c) => {
     const moduleId = c.req.param("moduleId");
     const module = deps.registry.get(moduleId);
@@ -42,21 +47,33 @@ export function createCircuitsRouter(deps: CircuitsDeps): Hono {
       throw AppError.notFound(`Circuit artifact for ${moduleId}`);
     }
 
-    const artifactPath =
-      process.env.CIRCUIT_ARTIFACT_PATH ??
-      resolve(
-        import.meta.dir,
-        "../../../circuits/bin/eth_balance/target/eth_balance.json",
-      );
+    if (!cachedArtifact) {
+      const artifactPath =
+        process.env.CIRCUIT_ARTIFACT_PATH ??
+        resolve(
+          import.meta.dir,
+          "../../../circuits/bin/eth_balance/target/eth_balance.json",
+        );
 
-    if (!existsSync(artifactPath)) {
-      throw AppError.notFound(
-        `Circuit artifact not found at ${artifactPath}. Run 'nargo compile' to generate it.`,
-      );
+      if (!existsSync(artifactPath)) {
+        throw AppError.notFound(
+          `Circuit artifact not found at ${artifactPath}. Run 'nargo compile' to generate it.`,
+        );
+      }
+
+      cachedArtifact = readFileSync(artifactPath, "utf-8");
+      cachedEtag = `"${createHash("sha256").update(cachedArtifact).digest("hex").slice(0, 16)}"`;
     }
 
-    const artifact = readFileSync(artifactPath, "utf-8");
-    return c.json(JSON.parse(artifact));
+    // Check If-None-Match for conditional request
+    const ifNoneMatch = c.req.header("if-none-match");
+    if (ifNoneMatch && ifNoneMatch === cachedEtag) {
+      return c.body(null, 304);
+    }
+
+    c.header("Cache-Control", "public, max-age=86400, immutable");
+    c.header("ETag", cachedEtag!);
+    return c.json(JSON.parse(cachedArtifact));
   });
 
   return app;
@@ -83,12 +100,33 @@ export function createNetworksRouter(deps: CircuitsDeps): Hono {
 export function createHealthRouter(deps: CircuitsDeps): Hono {
   const app = new Hono();
 
-  app.get("/", (c) => {
+  app.get("/", async (c) => {
     const uptimeMs = Date.now() - deps.startTime;
+    const networks = deps.dispatcher.getNetworks().filter((n) => n.enabled);
+
+    let status: "ok" | "degraded" = "ok";
+    const balances: Record<string, string> = {};
+
+    await Promise.all(
+      networks.map(async (n) => {
+        try {
+          const bal = await deps.dispatcher.getBalance(n.id);
+          balances[n.id] = bal.toString();
+          if (bal < BigInt(n.dispensationWei) * 10n) {
+            status = "degraded";
+          }
+        } catch {
+          balances[n.id] = "error";
+          status = "degraded";
+        }
+      }),
+    );
+
     return c.json({
-      status: "ok",
+      status,
       uptime: uptimeMs,
       version: "0.1.0",
+      balances,
     });
   });
 

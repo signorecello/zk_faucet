@@ -7,6 +7,7 @@ export class NullifierStore {
   private stmtSpend: ReturnType<Database["prepare"]>;
   private stmtIsSpent: ReturnType<Database["prepare"]>;
   private stmtUnspend: ReturnType<Database["prepare"]>;
+  private stmtPrune: ReturnType<Database["prepare"]>;
 
   constructor(dbPath: string = ":memory:") {
     if (dbPath !== ":memory:") {
@@ -38,6 +39,10 @@ export class NullifierStore {
     this.stmtUnspend = this.database.prepare(
       "DELETE FROM nullifiers WHERE module_id = ? AND nullifier = ?",
     );
+
+    this.stmtPrune = this.database.prepare(
+      "DELETE FROM nullifiers WHERE epoch < ?",
+    );
   }
 
   /**
@@ -65,6 +70,15 @@ export class NullifierStore {
   unspend(moduleId: string, nullifier: string): boolean {
     const result = this.stmtUnspend.run(moduleId, nullifier);
     return result.changes > 0;
+  }
+
+  /**
+   * Delete nullifiers from epochs older than the given epoch.
+   * Returns the number of deleted rows.
+   */
+  prune(beforeEpoch: number): number {
+    const result = this.stmtPrune.run(beforeEpoch);
+    return result.changes;
   }
 
   close(): void {

@@ -1,3 +1,4 @@
+import { formatEther } from 'viem';
 import type { ClaimResponse } from '../lib/api';
 import type { Network } from '../lib/api';
 
@@ -6,8 +7,7 @@ function truncateAddress(address: string): string {
 }
 
 function formatWei(wei: string): string {
-  const eth = Number(BigInt(wei)) / 1e18;
-  return eth.toFixed(4) + ' ETH';
+  return Number(formatEther(BigInt(wei))).toFixed(4) + ' ETH';
 }
 
 async function copyToClipboard(text: string) {

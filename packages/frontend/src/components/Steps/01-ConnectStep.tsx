@@ -1,5 +1,6 @@
 import { useDisconnect, useBalance } from 'wagmi';
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
+import { formatEther } from 'viem';
 import { originChain, MIN_BALANCE_WEI } from '../../lib/wallet-config';
 
 function truncateAddress(address: string): string {
@@ -7,7 +8,7 @@ function truncateAddress(address: string): string {
 }
 
 function formatBalance(wei: bigint): string {
-  return (Number(wei) / 1e18).toFixed(4);
+  return Number(formatEther(wei)).toFixed(4);
 }
 
 interface ConnectStepProps {
@@ -59,7 +60,7 @@ export function ConnectStep({ onContinue }: ConnectStepProps) {
 
       {!hasSufficientBalance && balance !== null && (
         <div className="message message-error" style={{ marginBottom: 12 }}>
-          Insufficient balance. You need at least {(Number(MIN_BALANCE_WEI) / 1e18).toFixed(4)} ETH on {originChain.name}.
+          Insufficient balance. You need at least {Number(formatEther(MIN_BALANCE_WEI)).toFixed(4)} ETH on {originChain.name}.
         </div>
       )}
 

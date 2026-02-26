@@ -1,4 +1,4 @@
-export const EPOCH_DURATION_SECONDS = 604_800; // 1 week
+export const EPOCH_DURATION_SECONDS = 86_400; // 1 day
 export const DOMAIN_MESSAGE = "zk_faucet_v1:eth-balance:nullifier_seed";
 export const MAX_STATE_ROOT_AGE_BLOCKS = 256;
 

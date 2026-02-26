@@ -195,13 +195,37 @@ initBackend().then(() => {
   logger.error({ err }, "Failed to initialize verification key — proof verification will fail");
 });
 
+// H3: Hourly nullifier pruning for old epochs
+const currentEpoch = () => Math.floor(Date.now() / 1000 / config.epochDuration);
+const nullifierPruneInterval = setInterval(() => {
+  const pruned = nullifierStore.prune(currentEpoch() - 2);
+  if (pruned > 0) {
+    logger.info({ pruned, beforeEpoch: currentEpoch() - 2 }, "Pruned old nullifiers");
+  }
+}, 3_600_000); // 1 hour
+nullifierPruneInterval.unref();
+
 logger.info(
   { port: config.port, host: config.host, originChainId: config.originChainId, minBalanceWei: config.minBalanceWei.toString() },
   "Starting zk_faucet server",
 );
 
-export default {
+// H7: Graceful shutdown
+const server = Bun.serve({
   port: config.port,
   hostname: config.host,
   fetch: app.fetch,
+});
+
+const shutdown = () => {
+  logger.info("Shutting down...");
+  oracle.stop();
+  clearInterval(rateLimitCleanupInterval);
+  clearInterval(nullifierPruneInterval);
+  nullifierStore.close();
+  server.stop();
+  process.exit(0);
 };
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

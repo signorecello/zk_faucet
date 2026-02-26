@@ -1,6 +1,6 @@
 # Next Steps: Production Readiness
 
-Last updated: 2026-02-25
+Last updated: 2026-02-26
 
 This document outlines what remains before zk_faucet can be deployed to production. Items are ordered by priority within each section. Each item references specific files and lines where changes are needed.
 
@@ -56,106 +56,53 @@ CORS middleware added via `hono/cors`. Origins configured via `ALLOWED_ORIGINS` 
 
 ## 2. High Priority -- Important for Production Readiness
 
-### H1. StateRootOracle has zero test coverage
+### ~~H1. StateRootOracle has zero test coverage~~ DONE
 
-**File:** `packages/server/src/lib/state-root-oracle.ts`
+**Fixed in:** `packages/server/test/state-root-oracle.test.ts`
 
-This is a security-critical component that determines which state roots are accepted. It is always mocked in tests. No unit tests exist for cache lifecycle, pruning, deduplication, empty cache fallback, or refresh error handling.
+15 unit tests covering start/stop lifecycle, refresh deduplication, missing stateRoot handling, cache pruning, gap backfill (including 10-block cap), getLatestStateRoot, isValidStateRoot (case-insensitive, empty cache refresh), and RPC error handling.
 
-**Action:** Create `packages/server/test/state-root-oracle.test.ts` with tests for:
-- `start()` / `stop()` lifecycle
-- `refresh()` deduplication (same block number)
-- Cache pruning (entries older than `maxAge`)
-- `getLatestStateRoot()` when cache is empty
-- `isValidStateRoot()` returning false for expired roots
-- Refresh error handling (RPC failures)
+### ~~H2. Frontend test coverage~~ DONE
 
-### H2. Frontend has zero test coverage (790+ LOC)
+**Fixed in:** `packages/frontend/src/lib/__tests__/prove-utils.test.ts` (new), plus 47 existing vitest tests.
 
-**Files:** `packages/frontend/src/api.ts`, `wallet.ts`, `ui.ts`, `prove.ts`
+Exported `padRight`, `padLeft`, `bigintToMinimalBytes`, `bytesToInputArray`, `bytesToHex` from `prove.ts` and added 21 unit tests for these pure utility functions. Total frontend tests: 68.
 
-The entire frontend has no tests. Security-relevant functions like `escapeHtml()`, `isValidAddress()`, and `formatBalance()` are untested.
+### ~~H3. No nullifier pruning for old epochs~~ DONE
 
-**Action:** Add test files using `bun:test` (with `happy-dom` for DOM):
-- `packages/frontend/test/ui.test.ts` -- `escapeHtml()` with XSS payloads, `isValidAddress()`, `formatWei()`, `formatEpochCountdown()`
-- `packages/frontend/test/api.test.ts` -- `ApiClient` with mocked `fetch`
-- `packages/frontend/test/wallet.test.ts` -- `formatBalance()`, `hasMinBalance()` boundary tests, `buildDomainMessage()` format verification
+**Fixed in:** `packages/server/src/lib/nullifier-store.ts`, `packages/server/src/index.ts`, `packages/server/test/nullifier-store.test.ts`
 
-### H3. No nullifier pruning for old epochs
+Added `prune(beforeEpoch)` method to NullifierStore. Server runs hourly pruning via `setInterval` (removes nullifiers from epochs older than `currentEpoch - 2`). Added 4 prune tests.
 
-**File:** `packages/server/src/lib/nullifier-store.ts`
+### ~~H4. No faucet balance monitoring~~ DONE
 
-The `nullifiers` SQLite table grows indefinitely. After an epoch ends, its nullifiers are no longer needed for deduplication but remain in the database forever.
+**Fixed in:** `packages/server/src/routes/circuits.ts`
 
-**Action:** Add a `prune(currentEpoch: number)` method to `NullifierStore`:
+`/health` endpoint now fetches faucet wallet balance for each enabled network. Returns `status: "degraded"` if any balance is below `dispensationWei * 10`. Balances included in response as `balances` object keyed by network ID.
 
-```typescript
-prune(currentEpoch: number): number {
-  const result = this.db.prepare(
-    "DELETE FROM nullifiers WHERE epoch < ?"
-  ).run(currentEpoch);
-  return result.changes;
-}
-```
+### ~~H5. Missing domain message cross-verification test~~ DONE
 
-Call it periodically from the server (e.g., on each new epoch).
+**Fixed in:** `packages/e2e/test/domain-message.test.ts`
 
-### H4. No faucet balance monitoring
+Added 8 E2E tests verifying: server DOMAIN_MESSAGE constant matches expected prefix, EPOCH_PAD_LENGTH is 10, domain message is exactly 50 bytes, EIP-191 wrapped message is 78 bytes, hashMessage consistency, prefix matches server constant, and regression test for known epoch hash.
 
-**Files:** `packages/server/src/lib/fund-dispatcher.ts`, `packages/server/src/routes/circuits.ts`
+### ~~H6. `formatBalance()` precision loss for large balances~~ DONE
 
-The server has no way to detect that the faucet wallet is running low on funds. Dispatches will silently fail when the wallet is drained.
+**Fixed in:** `01-ConnectStep.tsx`, `ResultCard.tsx`, `03-ClaimStep.tsx`
 
-**Action:**
-- Add a `/health` response field showing faucet wallet balance per network
-- Add a startup log warning if any network balance is below a configurable threshold
-- Optionally, add a balance check before dispatch to return a clear `FAUCET_DRAINED` error
+Replaced `Number(wei) / 1e18` with `viem`'s `formatEther()` which uses BigInt internally. Applied `Number(formatEther(wei)).toFixed(4)` — safe since the formatted string represents a small decimal.
 
-### H5. Missing domain message cross-verification test
+### ~~H7. No graceful shutdown~~ DONE
 
-**Files:** `packages/frontend/src/wallet.ts` (line 29), `packages/frontend/src/prove.ts` (line 185), circuit `main.nr`
+**Fixed in:** `packages/server/src/index.ts`
 
-The domain message string `"zk_faucet_v1:eth-balance:nullifier_seed:"` is duplicated across the frontend wallet module, the prove module, and the Noir circuit. If any copy diverges, proofs will silently fail. No test verifies consistency.
+Replaced `export default` with `Bun.serve()` to capture server handle. Added `SIGTERM`/`SIGINT` handlers that call `oracle.stop()`, clear intervals (rate limit cleanup + nullifier pruning), `nullifierStore.close()`, `server.stop()`.
 
-**Action:** Create a test that computes the EIP-191 hash of the domain message in TypeScript and compares it against a known expected value. Ideally as an E2E test that exercises both the TypeScript and circuit paths.
+### ~~H8. Circuit artifact served without caching headers~~ DONE
 
-### H6. `formatBalance()` precision loss for large balances
+**Fixed in:** `packages/server/src/routes/circuits.ts`
 
-**File:** `packages/frontend/src/wallet.ts`, lines 287-291
-
-```typescript
-const eth = Number(wei) / 1e18;
-```
-
-`Number()` loses precision for values above `Number.MAX_SAFE_INTEGER` (9007 ETH). This causes incorrect balance display for whales.
-
-**Fix:** Use BigInt arithmetic for the integer part and `Number` only for the fractional part, or use a formatting library.
-
-### H7. No graceful shutdown
-
-**File:** `packages/server/src/index.ts`
-
-The server does not handle `SIGTERM` or `SIGINT`. On shutdown, in-flight fund dispatches may be interrupted mid-transaction, and the state root oracle interval is never cleared.
-
-**Fix:** Add signal handlers:
-
-```typescript
-const shutdown = () => {
-  oracle.stop();
-  nullifierStore.close();
-  process.exit(0);
-};
-process.on("SIGTERM", shutdown);
-process.on("SIGINT", shutdown);
-```
-
-### H8. Circuit artifact served without caching headers
-
-**File:** `packages/server/src/routes/circuits.ts`
-
-The circuit artifact (~5 MB) is served on every request without `Cache-Control` or `ETag` headers. Each page load triggers a fresh download.
-
-**Fix:** Add `Cache-Control: public, max-age=86400, immutable` and/or `ETag` based on the file hash.
+Cached parsed artifact and SHA-256 ETag in closure-scoped variables. Added `Cache-Control: public, max-age=86400, immutable` and `ETag` headers. Returns 304 on `If-None-Match` match.
 
 ---
 

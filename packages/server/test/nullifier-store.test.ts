@@ -145,4 +145,44 @@ describe("NullifierStore", () => {
     const result = store.spend("eth-balance", "0xmax", Number.MAX_SAFE_INTEGER, "0xR1");
     expect(result).toBe(true);
   });
+
+  // --- Pruning tests (H3) ---
+
+  test("prune deletes nullifiers with epoch < threshold", () => {
+    store.spend("eth-balance", "0xold1", 10, "0xR1");
+    store.spend("eth-balance", "0xold2", 11, "0xR2");
+    store.spend("eth-balance", "0xcurrent", 12, "0xR3");
+    store.spend("eth-balance", "0xfuture", 13, "0xR4");
+
+    const deleted = store.prune(12);
+    expect(deleted).toBe(2); // epoch 10 and 11
+
+    expect(store.isSpent("eth-balance", "0xold1")).toBe(false);
+    expect(store.isSpent("eth-balance", "0xold2")).toBe(false);
+    expect(store.isSpent("eth-balance", "0xcurrent")).toBe(true);
+    expect(store.isSpent("eth-balance", "0xfuture")).toBe(true);
+  });
+
+  test("prune returns 0 when nothing to prune", () => {
+    store.spend("eth-balance", "0xn1", 100, "0xR1");
+    const deleted = store.prune(50);
+    expect(deleted).toBe(0);
+  });
+
+  test("prune with no data returns 0", () => {
+    const deleted = store.prune(100);
+    expect(deleted).toBe(0);
+  });
+
+  test("prune across modules", () => {
+    store.spend("module-a", "0xn1", 5, "0xR1");
+    store.spend("module-b", "0xn2", 5, "0xR2");
+    store.spend("module-a", "0xn3", 10, "0xR3");
+
+    const deleted = store.prune(8);
+    expect(deleted).toBe(2); // both epoch-5 entries
+    expect(store.isSpent("module-a", "0xn1")).toBe(false);
+    expect(store.isSpent("module-b", "0xn2")).toBe(false);
+    expect(store.isSpent("module-a", "0xn3")).toBe(true);
+  });
 });

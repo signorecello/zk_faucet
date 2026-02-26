@@ -35,31 +35,31 @@ export interface ProofResult {
 
 export type ProgressCallback = (step: string, detail?: string) => void;
 
-function padRight(data: Uint8Array, targetLen: number): Uint8Array {
+export function padRight(data: Uint8Array, targetLen: number): Uint8Array {
   const result = new Uint8Array(targetLen);
   result.set(data.subarray(0, Math.min(data.length, targetLen)));
   return result;
 }
 
-function padLeft(data: Uint8Array, targetLen: number): Uint8Array {
+export function padLeft(data: Uint8Array, targetLen: number): Uint8Array {
   if (data.length >= targetLen) return data.subarray(0, targetLen);
   const result = new Uint8Array(targetLen);
   result.set(data, targetLen - data.length);
   return result;
 }
 
-function bigintToMinimalBytes(value: bigint): Uint8Array {
+export function bigintToMinimalBytes(value: bigint): Uint8Array {
   if (value === 0n) return new Uint8Array([]);
   const hex = value.toString(16);
   const padded = hex.length % 2 === 1 ? '0' + hex : hex;
   return hexToBytes(`0x${padded}` as Hex);
 }
 
-function bytesToInputArray(bytes: Uint8Array): string[] {
+export function bytesToInputArray(bytes: Uint8Array): string[] {
   return Array.from(bytes).map((b) => b.toString());
 }
 
-function bytesToHex(bytes: Uint8Array): string {
+export function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
