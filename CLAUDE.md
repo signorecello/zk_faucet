@@ -96,12 +96,13 @@ bun run storage_proof_test:execute   # execute test circuit
 Hono API with modular proof verification.
 
 ### Key Concepts
-- **ProofModule** interface (`src/lib/modules/types.ts`): pluggable proof verification
-- **ModuleRegistry**: registers proof modules, looked up by `moduleId`
-- **NullifierStore** (`bun:sqlite`): race-safe with `INSERT OR IGNORE`, `unspend()` for rollback on dispatch failure
+- **ProofModule** interface (`src/lib/modules/types.ts`): pluggable proof verification with `nullifierGroup` for cross-chain dedup
+- **ModuleRegistry**: registers proof modules, looked up by `moduleId` (e.g. `eth-balance:1`, `eth-balance:8453`)
+- **NullifierStore** (`bun:sqlite`): race-safe with `INSERT OR IGNORE`, `unspend()` for rollback; uses `nullifierGroup` (not moduleId) for dedup
 - **ClaimStore** (`bun:sqlite`): persistent claim records (shares DB with NullifierStore)
 - **FundDispatcher**: sends testnet ETH via viem wallet clients
-- **StateRootOracle**: validates state roots against recent L1 blocks
+- **StateRootOracle**: validates state roots against recent blocks (one per origin chain, parameterized block time)
+- **Origin chains** (`src/lib/origin-chains.ts`): `loadOriginChains()` returns supported origin chains (Ethereum, Base) with RPC URLs
 
 ### API Endpoints
 | Endpoint | Method | Description |
@@ -132,11 +133,12 @@ React 19 SPA built with Vite. Wallet integration via Reown AppKit + wagmi v3.
 - **Lib layer**: `api.ts`, `prove.ts`, `wallet-config.ts`
 
 ### Key Design
-- **No server RPC leak**: `ORIGIN_RPC_URL` is never exposed to the browser
+- **Multi-origin-chain**: Users can prove balance on any supported mainnet (Ethereum, Base). Origin chains come from `/modules` at runtime.
+- **No server RPC leak**: Origin chain RPC URLs are server-only; never exposed to the browser
 - **Wallet provider for RPC**: Balance queries use `http()` transport (chain's public RPC); `getStorageProof()` uses AppKit's `walletProvider` via `useAppKitProvider('eip155')` for `eth_getProof`
-- **Origin chain from env**: `VITE_ORIGIN_CHAINID` determines which chain to connect to (no hardcoded defaults)
-- **Min balance from env**: `VITE_MIN_BALANCE_WEI` is the single source of truth for the balance threshold
-- **AppKit setup**: `wallet-config.ts` creates `WagmiAdapter` + `createAppKit` imperatively (no extra React provider needed)
+- **Origin chain dropdown**: ClaimStep shows origin chain selector with balances. Chain switch prompts wallet.
+- **Min balance from env**: `VITE_MIN_BALANCE_WEI` is the single source of truth for the balance threshold (modules also expose it via `/modules`)
+- **AppKit setup**: `wallet-config.ts` creates `WagmiAdapter` + `createAppKit` with all origin chains configured
 
 ### Vite Config
 - `envDir: '../..'` — loads `.env` from the monorepo root (not `packages/frontend/`)
@@ -153,6 +155,8 @@ React 19 SPA built with Vite. Wallet integration via Reown AppKit + wagmi v3.
 - **Proof generation**: ~85s with UltraHonk WASM, 35 public inputs (32 state_root bytes + epoch + min_balance + nullifier)
 - **Server verification**: Real UltraHonk verification via `@aztec/bb.js` (no mock verifier)
 - **No /config endpoint**: Frontend does not fetch config from server; all config via VITE_* build-time env vars
+- **Multi-origin nullifier**: All `eth-balance:*` modules share `nullifierGroup = "eth-balance"` so one user can't claim via different origin chains in the same epoch
+- **Origin chains**: Hardcoded list in `origin-chains.ts` (Ethereum, Base) with env var RPC overrides. Frontend discovers available chains from `/modules` response.
 
 ## Environment Variables
 
@@ -161,11 +165,9 @@ Shared config lives in the root `.env` (single source of truth). The server load
 ### Root `.env` — shared config + frontend aliases
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ORIGIN_CHAINID` | **Yes** | Origin chain ID (1, 11155111, 17000) |
 | `MIN_BALANCE_WEI` | **Yes** | Minimum balance threshold in wei |
 | `EPOCH_DURATION` | No | Epoch duration in seconds (default: 604800 = 1 week) |
-| `ORIGIN_RPC_URL` | **Yes** | Origin chain RPC URL (for server state root verification) |
-| `VITE_ORIGIN_CHAINID` | auto | `$ORIGIN_CHAINID` (Vite alias) |
+| `VITE_ORIGIN_CHAINID` | No | Default origin chain for wallet connection (default: 1) |
 | `VITE_MIN_BALANCE_WEI` | auto | `$MIN_BALANCE_WEI` (Vite alias) |
 | `VITE_EPOCH_DURATION` | auto | `$EPOCH_DURATION` (Vite alias) |
 | `VITE_REOWN_PROJECT_ID` | No | Reown project ID for WalletConnect (get from cloud.reown.com) |
@@ -179,6 +181,8 @@ Shared config lives in the root `.env` (single source of truth). The server load
 | `LOG_LEVEL` | No | Pino log level: `debug`, `info`, `warn`, `error` (default: `info`) |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (default: `*`) |
 | `DB_PATH` | No | SQLite database path (default: `./data/nullifiers.db`) |
+| `ETHEREUM_RPC_URL` | No | Ethereum mainnet RPC URL (falls back to public RPC) |
+| `BASE_RPC_URL` | No | Base mainnet RPC URL (falls back to public RPC) |
 | `SEPOLIA_RPC_URL` | No | Sepolia RPC URL (falls back to public RPC) |
 
 The server loads root `.env` first (shared vars), then local `.env` (server-specific). Local can override shared if needed.

@@ -2,20 +2,34 @@ import type { ProofModule, PublicInputs, ValidationResult } from "../types";
 import type { StateRootOracle } from "../../state-root-oracle";
 import { verifyProof } from "./verifier";
 
+interface EthBalanceModuleOptions {
+  epochDuration?: number;
+  minBalance: bigint;
+  chainId: number;
+  chainName: string;
+}
+
 export class EthBalanceModule implements ProofModule {
-  readonly id = "eth-balance";
-  readonly name = "ETH Balance Proof";
-  readonly description =
-    "Proves ownership of sufficient ETH on the origin chain without revealing the address";
+  readonly id: string;
+  readonly nullifierGroup = "eth-balance";
+  readonly name: string;
+  readonly description: string;
   readonly epochDurationSeconds: number;
+  readonly originChainId: number;
+  readonly originChainName: string;
+  readonly minBalanceWei: bigint;
 
   private readonly oracle: StateRootOracle;
-  private readonly minBalance: bigint;
 
-  constructor(oracle: StateRootOracle, options: { epochDuration?: number; minBalance: bigint }) {
+  constructor(oracle: StateRootOracle, options: EthBalanceModuleOptions) {
     this.oracle = oracle;
-    this.epochDurationSeconds = options?.epochDuration ?? 604_800;
-    this.minBalance = options.minBalance;
+    this.id = `eth-balance:${options.chainId}`;
+    this.name = `ETH Balance Proof (${options.chainName})`;
+    this.description = `Proves ownership of sufficient ETH on ${options.chainName} without revealing the address`;
+    this.epochDurationSeconds = options.epochDuration ?? 604_800;
+    this.originChainId = options.chainId;
+    this.originChainName = options.chainName;
+    this.minBalanceWei = options.minBalance;
   }
 
   currentEpoch(): number {
@@ -34,10 +48,10 @@ export class EthBalanceModule implements ProofModule {
 
     // Verify the minimum balance matches the required amount
     const claimedMin = BigInt(inputs.minBalance);
-    if (claimedMin < this.minBalance) {
+    if (claimedMin < this.minBalanceWei) {
       return {
         valid: false,
-        error: `Minimum balance too low: requires ${this.minBalance}, got ${claimedMin}`,
+        error: `Minimum balance too low: requires ${this.minBalanceWei}, got ${claimedMin}`,
       };
     }
 

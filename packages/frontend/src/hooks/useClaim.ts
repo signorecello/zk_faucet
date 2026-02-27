@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useSignMessage } from 'wagmi';
 import { api, ApiRequestError, type ClaimResponse, type Module } from '../lib/api';
-import { buildDomainMessage } from '../lib/wallet-config';
+import { buildDomainMessage, MIN_BALANCE_WEI } from '../lib/wallet-config';
 import { useStorageProof } from './useStorageProof';
 import { useProver } from './useProver';
 
@@ -64,6 +64,8 @@ export function useClaim(): ClaimState {
 
       try {
         const epoch = module.currentEpoch;
+        const originChainId = module.originChainId ?? 1;
+        const minBalance = module.minBalanceWei ? BigInt(module.minBalanceWei) : MIN_BALANCE_WEI;
 
         // Step 1: Sign domain message
         const message = buildDomainMessage(epoch);
@@ -78,13 +80,13 @@ export function useClaim(): ClaimState {
           throw new Error('Failed to sign message: ' + msg);
         }
 
-        // Step 2: Fetch storage proof
+        // Step 2: Fetch storage proof on the selected origin chain
         setStatus('fetching-proof');
-        setStatusDetail("Querying Ethereum via your wallet's RPC");
+        setStatusDetail(`Querying ${module.originChainName ?? 'origin chain'} via your wallet's RPC`);
 
         let storageProof;
         try {
-          storageProof = await fetchProof(address);
+          storageProof = await fetchProof(address, originChainId);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           throw new Error('Failed to fetch storage proof: ' + msg);
@@ -102,7 +104,7 @@ export function useClaim(): ClaimState {
           throw new Error('Failed to load circuit: ' + msg);
         }
 
-        // Step 4: Generate ZK proof
+        // Step 4: Generate ZK proof with module's min balance
         setStatus('proving');
         setStatusDetail('This may take 60-90 seconds');
 
@@ -112,6 +114,7 @@ export function useClaim(): ClaimState {
           signature,
           address,
           epoch,
+          minBalance,
         );
 
         // Step 5: Submit claim

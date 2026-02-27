@@ -97,6 +97,8 @@ function startFullTestServer(): FullTestServer {
   const module = new EthBalanceModule(oracle as any, {
     epochDuration: 604_800,
     minBalance: 10_000_000_000_000_000n,
+    chainId: 1,
+    chainName: "Ethereum",
   });
   // Mock verifyProof at module level (no real Barretenberg in frontend API tests)
   (module as any).verifyProof = async (proof: Uint8Array, _inputs: any) => {
@@ -319,9 +321,9 @@ describe("Frontend API integration tests", () => {
     test("eth-balance module is listed", async () => {
       const res = await fetch(`${server.baseUrl}/modules`);
       const json = (await res.json()) as any;
-      const ethModule = json.modules.find((m: any) => m.id === "eth-balance");
+      const ethModule = json.modules.find((m: any) => m.id === "eth-balance:1");
       expect(ethModule).toBeDefined();
-      expect(ethModule.name).toBe("ETH Balance Proof");
+      expect(ethModule.name).toContain("ETH Balance Proof");
     });
   });
 

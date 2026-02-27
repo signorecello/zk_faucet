@@ -15,6 +15,9 @@ export interface Module {
   description: string;
   currentEpoch: number;
   epochDurationSeconds: number;
+  originChainId?: number;
+  originChainName?: string;
+  minBalanceWei?: string;
 }
 
 export interface ClaimRequest {

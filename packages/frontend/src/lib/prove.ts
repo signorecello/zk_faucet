@@ -12,7 +12,6 @@ import {
   type Hex,
 } from 'viem';
 import type { StorageProofResponse } from './api';
-import { MIN_BALANCE_WEI } from './wallet-config';
 
 // Circuit constants (must match lib/ethereum)
 const MAX_NODE_LEN = 532;
@@ -71,6 +70,7 @@ export async function generateProofInBrowser(
   signature: string,
   address: string,
   epoch: number,
+  minBalance: bigint,
   onProgress?: ProgressCallback,
 ): Promise<ProofResult> {
   const progress = onProgress ?? (() => {});
@@ -201,7 +201,7 @@ export async function generateProofInBrowser(
     proof_depth: depth.toString(),
     state_root: bytesToInputArray(stateRootBytes),
     epoch: epoch.toString(),
-    min_balance: MIN_BALANCE_WEI.toString(),
+    min_balance: minBalance.toString(),
     nullifier: nullifier_bigint.toString(),
   };
 
@@ -246,7 +246,7 @@ export async function generateProofInBrowser(
     publicInputs: {
       stateRoot: stateRootHex,
       epoch,
-      minBalance: MIN_BALANCE_WEI.toString(),
+      minBalance: minBalance.toString(),
       nullifier: '0x' + nullifier_bigint.toString(16),
     },
   };

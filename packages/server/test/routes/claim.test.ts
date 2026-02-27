@@ -10,7 +10,8 @@ import pino from "pino";
 
 function createMockModule(overrides: Partial<ProofModule> = {}): ProofModule {
   return {
-    id: "eth-balance",
+    id: "eth-balance:1",
+    nullifierGroup: "eth-balance",
     name: "ETH Balance Proof",
     description: "Test module",
     epochDurationSeconds: 604800,
@@ -48,7 +49,7 @@ const logger = pino({ level: "silent" });
 
 function validClaimBody() {
   return {
-    moduleId: "eth-balance",
+    moduleId: "eth-balance:1",
     proof: "0xdeadbeef",
     publicInputs: {
       stateRoot: "0x" + "ab".repeat(32),

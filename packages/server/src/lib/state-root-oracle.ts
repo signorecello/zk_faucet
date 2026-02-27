@@ -13,21 +13,22 @@ export class StateRootOracle {
   private cache: CachedStateRoot[] = [];
   private refreshInterval: ReturnType<typeof setInterval> | null = null;
   private maxAge: number;
+  private blockTimeMs: number;
 
-  constructor(client: PublicClient, logger: Logger, maxAge: number = MAX_STATE_ROOT_AGE_BLOCKS) {
+  constructor(client: PublicClient, logger: Logger, maxAge: number = MAX_STATE_ROOT_AGE_BLOCKS, blockTimeMs: number = 12_000) {
     this.client = client;
     this.logger = logger;
     this.maxAge = maxAge;
+    this.blockTimeMs = blockTimeMs;
   }
 
   async start(): Promise<void> {
     await this.refresh();
-    // Refresh every 12 seconds (L1 block time)
     this.refreshInterval = setInterval(() => {
       this.refresh().catch((err) => {
         this.logger.error({ err }, "Failed to refresh state roots");
       });
-    }, 12_000);
+    }, this.blockTimeMs);
   }
 
   stop(): void {

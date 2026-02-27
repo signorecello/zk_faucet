@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
 import { createPublicClient, http } from "viem";
-import { mainnet, sepolia, holesky } from "viem/chains";
 import { loadConfig } from "./util/env";
 import { createLogger } from "./util/logger";
 import { AppError } from "./util/errors";
@@ -24,6 +23,7 @@ import {
 
 // Load networks configuration
 import { loadNetworks } from "./lib/networks";
+import { loadOriginChains } from "./lib/origin-chains";
 
 const config = loadConfig();
 const logger = createLogger(config.logLevel);
@@ -60,28 +60,27 @@ function getRateLimitKey(c: { req: { header: (name: string) => string | undefine
 
 // --- Initialize infrastructure ---
 
-// Resolve origin chain from ORIGIN_CHAINID
-const originChainMap = { 1: mainnet, 11155111: sepolia, 17000: holesky } as const;
-const originChain = originChainMap[config.originChainId as keyof typeof originChainMap];
-
-// Origin chain public client for state root verification
-const l1Client = createPublicClient({
-  chain: originChain,
-  transport: http(config.ethRpcUrl),
-});
-logger.info({ chainId: config.originChainId, chainName: originChain.name }, "Origin chain configured");
-
-// State root oracle
-const oracle = new StateRootOracle(l1Client, logger);
-
-// Module registry
+// Origin chains + state root oracles
+const originChains = loadOriginChains();
+const oracles: StateRootOracle[] = [];
 const registry = new ModuleRegistry();
-registry.register(
-  new EthBalanceModule(oracle, {
-    epochDuration: config.epochDuration,
-    minBalance: config.minBalanceWei,
-  }),
-);
+
+for (const oc of originChains) {
+  const client = createPublicClient({ chain: oc.chain, transport: http(oc.rpcUrl) });
+  const oracle = new StateRootOracle(client, logger, undefined, oc.blockTimeMs);
+  oracles.push(oracle);
+
+  registry.register(
+    new EthBalanceModule(oracle, {
+      chainId: oc.chainId,
+      chainName: oc.name,
+      epochDuration: config.epochDuration,
+      minBalance: config.minBalanceWei,
+    }),
+  );
+
+  logger.info({ chainId: oc.chainId, chainName: oc.name }, "Origin chain configured");
+}
 
 // Nullifier store (SQLite)
 // Resolve relative DB path from project root (two levels up from server package)
@@ -171,26 +170,14 @@ app.get("*", async (c) => {
   return c.notFound();
 });
 
-// Verify ORIGIN_RPC_URL matches ORIGIN_CHAINID before starting
-l1Client.getChainId().then((rpcChainId) => {
-  if (rpcChainId !== config.originChainId) {
-    logger.error(
-      { expected: config.originChainId, actual: rpcChainId },
-      "ORIGIN_RPC_URL chain ID does not match ORIGIN_CHAINID! Fix your .env",
-    );
-    process.exit(1);
-  }
-  logger.info({ chainId: rpcChainId }, "RPC chain ID verified");
-}).catch((err) => {
-  logger.error({ err }, "Failed to verify RPC chain ID");
-});
-
-// Start the oracle and server
-oracle.start().then(() => {
-  logger.info("State root oracle started");
-}).catch((err) => {
-  logger.warn({ err }, "State root oracle failed to start (will retry on next interval)");
-});
+// Start all oracles
+for (const oracle of oracles) {
+  oracle.start().then(() => {
+    logger.info("State root oracle started");
+  }).catch((err) => {
+    logger.warn({ err }, "State root oracle failed to start (will retry on next interval)");
+  });
+}
 
 // Initialize verification key before starting server (blocks startup to prevent
 // claims arriving before the VK is ready — first run takes ~80s without cache)
@@ -213,7 +200,7 @@ const nullifierPruneInterval = setInterval(() => {
 nullifierPruneInterval.unref();
 
 logger.info(
-  { port: config.port, host: config.host, originChainId: config.originChainId, minBalanceWei: config.minBalanceWei.toString() },
+  { port: config.port, host: config.host, originChains: originChains.map((c) => c.name), minBalanceWei: config.minBalanceWei.toString() },
   "Starting zk_faucet server",
 );
 
@@ -226,7 +213,7 @@ const server = Bun.serve({
 
 const shutdown = () => {
   logger.info("Shutting down...");
-  oracle.stop();
+  for (const oracle of oracles) oracle.stop();
   clearInterval(rateLimitCleanupInterval);
   clearInterval(nullifierPruneInterval);
   nullifierStore.close();

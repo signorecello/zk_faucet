@@ -55,7 +55,7 @@ export const TEST_RECIPIENT = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
 export const TEST_NETWORK = "sepolia";
 
 /** Module ID for the eth-balance proof module. */
-export const MODULE_ID = "eth-balance";
+export const MODULE_ID = "eth-balance:1";
 
 /** Minimum balance in wei matching the server constant (0.01 ETH). */
 export const MIN_BALANCE_WEI = "10000000000000000";

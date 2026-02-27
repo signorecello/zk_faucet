@@ -22,6 +22,9 @@ export function createModulesRouter(deps: CircuitsDeps): Hono {
       description: m.description,
       currentEpoch: m.currentEpoch(),
       epochDurationSeconds: m.epochDurationSeconds,
+      originChainId: m.originChainId,
+      originChainName: m.originChainName,
+      minBalanceWei: m.minBalanceWei?.toString(),
     }));
     return c.json({ modules });
   });
@@ -43,7 +46,7 @@ export function createCircuitsRouter(deps: CircuitsDeps): Hono {
       throw AppError.notFound(`Module ${moduleId}`);
     }
 
-    if (moduleId !== "eth-balance") {
+    if (!moduleId.startsWith("eth-balance")) {
       throw AppError.notFound(`Circuit artifact for ${moduleId}`);
     }
 

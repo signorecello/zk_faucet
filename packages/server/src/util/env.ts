@@ -1,6 +1,4 @@
 export interface ServerConfig {
-  ethRpcUrl: string;
-  originChainId: number;
   faucetPrivateKey: `0x${string}`;
   port: number;
   host: string;
@@ -32,14 +30,7 @@ export function loadConfig(): ServerConfig {
     throw new Error("FAUCET_PRIVATE_KEY must start with 0x");
   }
 
-  const originChainId = parseInt(requireEnv("ORIGIN_CHAINID"), 10);
-  if (![1, 11155111, 17000].includes(originChainId)) {
-    throw new Error(`Unsupported ORIGIN_CHAINID: ${originChainId}. Must be 1, 11155111, or 17000`);
-  }
-
   return {
-    ethRpcUrl: requireEnv("ORIGIN_RPC_URL"),
-    originChainId,
     faucetPrivateKey: faucetPrivateKey as `0x${string}`,
     port: parseInt(optionalEnv("PORT", "3000"), 10),
     host: optionalEnv("HOST", "0.0.0.0"),

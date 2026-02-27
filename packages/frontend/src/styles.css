@@ -657,6 +657,62 @@ select option {
   opacity: 0.8;
 }
 
+/* Origin chain balances */
+.origin-balances {
+  margin-bottom: 16px;
+}
+
+.origin-balance-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 0.75rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-family: inherit;
+  cursor: default;
+}
+
+.origin-balance-row:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.origin-balance-row.selectable {
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.origin-balance-row.selectable:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.origin-balance-row.selected {
+  border-color: var(--primary);
+  background: rgba(102, 255, 178, 0.05);
+}
+
+.origin-balance-row.selectable:not(:last-child) {
+  border-bottom-color: transparent;
+}
+
+.origin-chain-name {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.origin-chain-balance {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+.origin-chain-min {
+  color: var(--text-muted);
+}
+
 /* Footer */
 .footer {
   text-align: center;

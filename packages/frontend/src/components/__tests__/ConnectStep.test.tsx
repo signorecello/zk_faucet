@@ -26,6 +26,7 @@ vi.mock('wagmi', async (importOriginal) => {
     ...actual,
     useDisconnect: () => ({ disconnect: mockDisconnect }),
     useBalance: () => ({ data: mockBalanceData }),
+    useSwitchChain: () => ({ switchChain: vi.fn() }),
   };
 });
 
@@ -33,6 +34,16 @@ import { ConnectStep } from '../../components/Steps/01-ConnectStep';
 
 describe('ConnectStep', () => {
   const onContinue = vi.fn();
+  const onModuleChange = vi.fn();
+  const defaultModules = [
+    { id: 'eth-balance:1', name: 'ETH Balance (Ethereum)', description: '', currentEpoch: 1, epochDurationSeconds: 604800, originChainId: 1, originChainName: 'Ethereum' },
+  ];
+  const defaultProps = {
+    modules: defaultModules,
+    selectedModuleId: 'eth-balance:1',
+    onModuleChange,
+    onContinue,
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -41,12 +52,12 @@ describe('ConnectStep', () => {
   });
 
   it('renders Connect Wallet button when disconnected', () => {
-    render(<ConnectStep onContinue={onContinue} />);
+    render(<ConnectStep {...defaultProps} />);
     expect(screen.getByText('Connect Wallet')).toBeInTheDocument();
   });
 
   it('opens wallet modal on Connect Wallet click', () => {
-    render(<ConnectStep onContinue={onContinue} />);
+    render(<ConnectStep {...defaultProps} />);
     fireEvent.click(screen.getByText('Connect Wallet'));
     expect(mockOpen).toHaveBeenCalledOnce();
   });
@@ -58,7 +69,7 @@ describe('ConnectStep', () => {
     };
     mockBalanceData = { value: 1000000000000000000n }; // 1 ETH
 
-    render(<ConnectStep onContinue={onContinue} />);
+    render(<ConnectStep {...defaultProps} />);
     expect(screen.getByText('0x1234...5678')).toBeInTheDocument();
     expect(screen.getByText(/1\.0000 ETH/)).toBeInTheDocument();
     expect(screen.getByText(/\[ok\]/)).toBeInTheDocument();
@@ -71,7 +82,7 @@ describe('ConnectStep', () => {
     };
     mockBalanceData = { value: 1000000000000000n }; // 0.001 ETH (below threshold)
 
-    render(<ConnectStep onContinue={onContinue} />);
+    render(<ConnectStep {...defaultProps} />);
     expect(screen.getByText(/\[insufficient\]/)).toBeInTheDocument();
     expect(screen.getByText(/Insufficient balance/)).toBeInTheDocument();
   });
@@ -83,7 +94,7 @@ describe('ConnectStep', () => {
     };
     mockBalanceData = { value: 1000000000000000n };
 
-    render(<ConnectStep onContinue={onContinue} />);
+    render(<ConnectStep {...defaultProps} />);
     expect(screen.getByText('Continue')).toBeDisabled();
   });
 
@@ -94,7 +105,7 @@ describe('ConnectStep', () => {
     };
     mockBalanceData = { value: 1000000000000000000n };
 
-    render(<ConnectStep onContinue={onContinue} />);
+    render(<ConnectStep {...defaultProps} />);
     const btn = screen.getByText('Continue');
     expect(btn).not.toBeDisabled();
     fireEvent.click(btn);
@@ -108,7 +119,7 @@ describe('ConnectStep', () => {
     };
     mockBalanceData = { value: 1000000000000000000n };
 
-    render(<ConnectStep onContinue={onContinue} />);
+    render(<ConnectStep {...defaultProps} />);
     fireEvent.click(screen.getByText('disconnect'));
     expect(mockDisconnect).toHaveBeenCalledOnce();
   });

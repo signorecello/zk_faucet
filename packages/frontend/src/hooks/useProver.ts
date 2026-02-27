@@ -17,6 +17,7 @@ interface ProverState {
     signature: string,
     address: string,
     epoch: number,
+    minBalance: bigint,
   ) => Promise<ProofResult>;
   proof: ProofResult | null;
   status: ProverStatus;
@@ -45,6 +46,7 @@ export function useProver(): ProverState {
       signature: string,
       address: string,
       epoch: number,
+      minBalance: bigint,
     ): Promise<ProofResult> => {
       setStatus('executing');
       setError(null);
@@ -58,6 +60,7 @@ export function useProver(): ProverState {
           signature,
           address,
           epoch,
+          minBalance,
           (step, detail) => {
             if (step.includes('ZK proof')) {
               setStatus('proving');

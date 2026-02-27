@@ -131,6 +131,8 @@ export function startTestServer(): TestServer {
   const module = new EthBalanceModule(oracle as any, {
     epochDuration: 604_800,
     minBalance: 10_000_000_000_000_000n,
+    chainId: 1,
+    chainName: "Ethereum",
   });
 
   // Always mock verifyProof at the module level for E2E tests.

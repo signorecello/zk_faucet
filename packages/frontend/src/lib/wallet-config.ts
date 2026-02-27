@@ -1,25 +1,20 @@
 // Wagmi config + Reown AppKit setup for React hooks
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import { createAppKit } from '@reown/appkit/react';
-import { mainnet, sepolia, holesky } from '@reown/appkit/networks';
+import { mainnet, sepolia, holesky, base } from '@reown/appkit/networks';
 import type { AppKitNetwork } from '@reown/appkit/networks';
 
 /** Map chain IDs to AppKit network objects */
-const NETWORK_MAP: Record<number, AppKitNetwork> = {
+export const NETWORK_MAP: Record<number, AppKitNetwork> = {
   1: mainnet,
   11155111: sepolia,
   17000: holesky,
+  8453: base,
 };
 
-/** Origin chain ID from build-time env var */
-const originChainId = Number(import.meta.env.VITE_ORIGIN_CHAINID);
-if (!originChainId || !NETWORK_MAP[originChainId]) {
-  throw new Error(
-    `VITE_ORIGIN_CHAINID must be set to a supported chain ID (${Object.keys(NETWORK_MAP).join(', ')}). Got: ${import.meta.env.VITE_ORIGIN_CHAINID}`,
-  );
-}
-
-export const originNetwork = NETWORK_MAP[originChainId];
+/** Default origin chain ID from build-time env var (defaults to Ethereum mainnet) */
+const defaultOriginChainId = Number(import.meta.env.VITE_ORIGIN_CHAINID || '1');
+export const originNetwork = NETWORK_MAP[defaultOriginChainId] ?? mainnet;
 
 /** Re-export as originChain for backward compat with hooks that use viem Chain type */
 export const originChain = originNetwork;
@@ -32,7 +27,7 @@ if (!minBalanceRaw) {
 export const MIN_BALANCE_WEI = BigInt(minBalanceRaw);
 
 console.log(
-  `[zk_faucet] config: VITE_ORIGIN_CHAINID=${originChainId} (${originNetwork.name}), VITE_MIN_BALANCE_WEI=${minBalanceRaw}`,
+  `[zk_faucet] config: default_origin=${defaultOriginChainId} (${originNetwork.name}), VITE_MIN_BALANCE_WEI=${minBalanceRaw}`,
 );
 
 /** Domain message prefix -- must match circuit and server exactly */
@@ -57,7 +52,11 @@ export function getCurrentEpoch(): number {
 
 const projectId = import.meta.env.VITE_REOWN_PROJECT_ID;
 
-const networks: [AppKitNetwork, ...AppKitNetwork[]] = [originNetwork];
+// Include all origin chains + default origin chain first
+const networks: [AppKitNetwork, ...AppKitNetwork[]] = [
+  originNetwork,
+  ...Object.values(NETWORK_MAP).filter(n => n !== originNetwork),
+];
 
 const wagmiAdapter = new WagmiAdapter({
   projectId,

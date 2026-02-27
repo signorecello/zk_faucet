@@ -13,6 +13,7 @@ process.env.NODE_ENV = "test";
 function createMockModule(id: string, epochDuration: number = 604_800): ProofModule {
   return {
     id,
+    nullifierGroup: id,
     name: `Mock ${id}`,
     description: `Test module ${id}`,
     epochDurationSeconds: epochDuration,

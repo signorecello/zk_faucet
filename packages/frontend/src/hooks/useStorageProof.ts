@@ -1,13 +1,21 @@
 import { useState, useCallback } from 'react';
-import { createPublicClient, custom } from 'viem';
+import { createPublicClient, custom, type Chain } from 'viem';
+import { mainnet, base, sepolia, holesky } from 'viem/chains';
 import { useAppKitProvider } from '@reown/appkit/react';
-import { originChain } from '../lib/wallet-config';
 import type { StorageProofResponse } from '../lib/api';
+
+/** Map chain IDs to viem Chain objects for createPublicClient */
+const VIEM_CHAIN_MAP: Record<number, Chain> = {
+  1: mainnet,
+  8453: base,
+  11155111: sepolia,
+  17000: holesky,
+};
 
 type Status = 'idle' | 'fetching' | 'success' | 'error';
 
 interface StorageProofState {
-  fetchProof: (address: string) => Promise<StorageProofResponse>;
+  fetchProof: (address: string, chainId: number) => Promise<StorageProofResponse>;
   proof: StorageProofResponse | null;
   status: Status;
   error: string | null;
@@ -19,9 +27,14 @@ export function useStorageProof(): StorageProofState {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProof = useCallback(async (address: string): Promise<StorageProofResponse> => {
+  const fetchProof = useCallback(async (address: string, chainId: number): Promise<StorageProofResponse> => {
     if (!walletProvider) {
       throw new Error('No wallet provider available.');
+    }
+
+    const chain = VIEM_CHAIN_MAP[chainId];
+    if (!chain) {
+      throw new Error(`Unsupported origin chain: ${chainId}`);
     }
 
     setStatus('fetching');
@@ -29,8 +42,8 @@ export function useStorageProof(): StorageProofState {
 
     try {
       const client = createPublicClient({
-        chain: originChain,
-        transport: custom(walletProvider),
+        chain,
+        transport: custom(walletProvider as any),
       });
 
       const block = await client.getBlock({ blockTag: 'latest' });

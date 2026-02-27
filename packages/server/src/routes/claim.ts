@@ -79,7 +79,7 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
     }
 
     // Atomically check and record nullifier (prevents concurrent double-spend)
-    const spent = deps.nullifierStore.spend(moduleId, publicInputs.nullifier, publicInputs.epoch, recipient);
+    const spent = deps.nullifierStore.spend(module.nullifierGroup, publicInputs.nullifier, publicInputs.epoch, recipient);
     if (!spent) {
       throw AppError.alreadyClaimed();
     }
@@ -94,7 +94,7 @@ export function createClaimRouter(deps: ClaimDeps): Hono {
       );
     } catch (err) {
       // Roll back the nullifier so the user can retry
-      deps.nullifierStore.unspend(moduleId, publicInputs.nullifier);
+      deps.nullifierStore.unspend(module.nullifierGroup, publicInputs.nullifier);
       const message = err instanceof Error ? err.message : String(err);
       deps.logger.error({ err, recipient, targetNetwork }, "Fund dispatch failed");
       throw AppError.dispatchFailed(message);

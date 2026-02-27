@@ -60,6 +60,8 @@ function buildRateLimitedServer() {
   const module = new EthBalanceModule(oracle as any, {
     epochDuration: 604_800,
     minBalance: 10_000_000_000_000_000n,
+    chainId: 1,
+    chainName: "Ethereum",
   });
   // Mock verifyProof at module level (no real Barretenberg in rate limit tests)
   (module as any).verifyProof = async (proof: Uint8Array, _inputs: any) => {

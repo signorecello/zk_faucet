@@ -22,8 +22,16 @@ export function StepList() {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [recipient, setRecipient] = useState('');
   const [targetNetwork, setTargetNetwork] = useState('');
+  const [selectedModuleId, setSelectedModuleId] = useState('');
 
-  const ethBalanceModule = modules.find((m) => m.id === 'eth-balance') ?? modules[0];
+  // Default to first module when modules load
+  useEffect(() => {
+    if (modules.length > 0 && !selectedModuleId) {
+      setSelectedModuleId(modules[0].id);
+    }
+  }, [modules, selectedModuleId]);
+
+  const selectedModule = modules.find((m) => m.id === selectedModuleId) ?? modules[0];
 
   const completeStep = useCallback(
     (step: number) => {
@@ -64,7 +72,12 @@ export function StepList() {
         isCompleted={isStep1Complete}
         onToggle={() => setOpenStep(openStep === 1 ? 0 : 1)}
       >
-        <ConnectStep onContinue={handleConnectContinue} />
+        <ConnectStep
+          modules={modules}
+          selectedModuleId={selectedModuleId}
+          onModuleChange={setSelectedModuleId}
+          onContinue={handleConnectContinue}
+        />
       </StepContainer>
 
       <StepContainer
@@ -87,7 +100,7 @@ export function StepList() {
         {!claimHook.result && (
           <div style={{ marginTop: 16 }}>
             <ProveStep
-              module={ethBalanceModule}
+              module={selectedModule}
               recipient={recipient}
               targetNetwork={targetNetwork}
               networks={networks}
