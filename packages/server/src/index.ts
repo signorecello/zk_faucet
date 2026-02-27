@@ -49,11 +49,13 @@ const rateLimitCleanupInterval = setInterval(() => {
 rateLimitCleanupInterval.unref();
 
 function getRateLimitKey(c: { req: { header: (name: string) => string | undefined } }): string {
-  return (
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-    c.req.header("x-real-ip") ??
-    "unknown"
-  );
+  const xff = c.req.header("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    // Rightmost entry is added by our trusted proxy (Caddy), not the client
+    return parts[parts.length - 1] ?? "unknown";
+  }
+  return c.req.header("x-real-ip") ?? "unknown";
 }
 
 // --- Initialize infrastructure ---
@@ -160,10 +162,13 @@ const frontendDir = new URL("../../frontend/dist", import.meta.url).pathname;
 
 app.use("/assets/*", serveStatic({ root: frontendDir }));
 
-app.get("/", async (c) => {
+app.get("*", async (c) => {
   const file = Bun.file(`${frontendDir}/index.html`);
-  const html = await file.text();
-  return c.html(html);
+  if (await file.exists()) {
+    const html = await file.text();
+    return c.html(html);
+  }
+  return c.notFound();
 });
 
 // Verify ORIGIN_RPC_URL matches ORIGIN_CHAINID before starting
@@ -187,13 +192,15 @@ oracle.start().then(() => {
   logger.warn({ err }, "State root oracle failed to start (will retry on next interval)");
 });
 
-// Eagerly initialize verification key (loads from cache or generates once)
+// Initialize verification key before starting server (blocks startup to prevent
+// claims arriving before the VK is ready — first run takes ~80s without cache)
 const vkStart = performance.now();
-initBackend().then(() => {
+try {
+  await initBackend();
   logger.info({ durationMs: Math.round(performance.now() - vkStart) }, "Verification key ready");
-}).catch((err) => {
+} catch (err) {
   logger.error({ err }, "Failed to initialize verification key — proof verification will fail");
-});
+}
 
 // H3: Hourly nullifier pruning for old epochs
 const currentEpoch = () => Math.floor(Date.now() / 1000 / config.epochDuration);

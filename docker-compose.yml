@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        VITE_ORIGIN_CHAINID: ${ORIGIN_CHAINID:-1}
+        VITE_MIN_BALANCE_WEI: ${MIN_BALANCE_WEI:-1000000000000000}
+        VITE_EPOCH_DURATION: ${EPOCH_DURATION:-3600}
+        VITE_REOWN_PROJECT_ID: ${VITE_REOWN_PROJECT_ID}
+    env_file:
+      - .env
+      - packages/server/.env
+    environment:
+      - DB_PATH=/app/data/nullifiers.db
+      - VK_CACHE_PATH=/app/data/eth_balance.vk.bin
+      - HOST=0.0.0.0
+      - PORT=3000
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    ports:
+      - "3000:3000"
+    volumes:
+      - db-data:/app/data
+    restart: unless-stopped
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    restart: unless-stopped
+    networks:
+      - internal
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  internal:

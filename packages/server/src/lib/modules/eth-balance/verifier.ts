@@ -15,8 +15,10 @@ const CIRCUIT_ARTIFACT_PATH =
     "../../../../../circuits/bin/eth_balance/target/eth_balance.json",
   );
 
-/** Path to the cached verification key (sits next to the circuit artifact). */
-const VK_CACHE_PATH = CIRCUIT_ARTIFACT_PATH.replace(/\.json$/, ".vk.bin");
+/** Path to the cached verification key (configurable, defaults to next to circuit artifact). */
+const VK_CACHE_PATH =
+  process.env.VK_CACHE_PATH ??
+  CIRCUIT_ARTIFACT_PATH.replace(/\.json$/, ".vk.bin");
 
 /** Cached verification key — loaded from disk or generated once at startup. */
 let cachedVk: Uint8Array | null = null;

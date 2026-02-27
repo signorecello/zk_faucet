@@ -1,0 +1,8 @@
+node_modules
+data/
+.env
+.env.*
+!.env.example
+packages/circuits/bin/*/target
+packages/frontend/dist
+.git
