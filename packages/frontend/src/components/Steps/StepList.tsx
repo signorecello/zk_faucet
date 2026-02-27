@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { StepContainer } from './StepContainer';
 import { ConnectStep } from './01-ConnectStep';
@@ -6,11 +6,17 @@ import { ProveStep } from './02-ProveStep';
 import { ClaimStep } from './03-ClaimStep';
 import { useNetworks } from '../../hooks/useNetworks';
 import { useClaim } from '../../hooks/useClaim';
+import { api } from '../../lib/api';
 
 export function StepList() {
   const { address, isConnected } = useAccount();
   const { networks, modules, loading: networksLoading } = useNetworks();
   const claimHook = useClaim();
+  const [balances, setBalances] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    api.getHealth().then((h) => setBalances(h.balances)).catch(() => {});
+  }, []);
 
   const [openStep, setOpenStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -76,6 +82,7 @@ export function StepList() {
           onNetworkChange={setTargetNetwork}
           result={claimHook.result}
           loading={networksLoading}
+          balances={balances}
         />
         {!claimHook.result && (
           <div style={{ marginTop: 16 }}>

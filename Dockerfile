@@ -18,12 +18,14 @@ ARG VITE_ORIGIN_CHAINID
 ARG VITE_MIN_BALANCE_WEI
 ARG VITE_EPOCH_DURATION
 ARG VITE_REOWN_PROJECT_ID
+ARG VITE_FAUCET_LOW_BALANCE_WEI
 
 # Write a temporary .env for Vite (reads from envDir: '../..')
 RUN echo "VITE_ORIGIN_CHAINID=$VITE_ORIGIN_CHAINID" > .env \
     && echo "VITE_MIN_BALANCE_WEI=$VITE_MIN_BALANCE_WEI" >> .env \
     && echo "VITE_EPOCH_DURATION=$VITE_EPOCH_DURATION" >> .env \
-    && echo "VITE_REOWN_PROJECT_ID=$VITE_REOWN_PROJECT_ID" >> .env
+    && echo "VITE_REOWN_PROJECT_ID=$VITE_REOWN_PROJECT_ID" >> .env \
+    && echo "VITE_FAUCET_LOW_BALANCE_WEI=$VITE_FAUCET_LOW_BALANCE_WEI" >> .env
 
 # Compile circuits (nargo) then build frontend (vite)
 RUN bun run build

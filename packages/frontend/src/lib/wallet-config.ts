@@ -85,3 +85,6 @@ createAppKit({
 });
 
 export const wagmiConfig = wagmiAdapter.wagmiConfig;
+
+/** Low-balance warning threshold for faucet wallet */
+export const FAUCET_LOW_BALANCE_WEI = BigInt(import.meta.env.VITE_FAUCET_LOW_BALANCE_WEI || '500000000000000000');

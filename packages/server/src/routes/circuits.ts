@@ -126,6 +126,7 @@ export function createHealthRouter(deps: CircuitsDeps): Hono {
       status,
       uptime: uptimeMs,
       version: "0.1.0",
+      faucetAddress: deps.dispatcher.getAddress(),
       balances,
     });
   });

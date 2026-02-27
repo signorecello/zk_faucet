@@ -147,6 +147,10 @@ export class FundDispatcher {
     return Array.from(this.networks.values());
   }
 
+  getAddress(): string {
+    return this.account.address;
+  }
+
   getNetwork(networkId: string): NetworkConfig | undefined {
     return this.networks.get(networkId);
   }

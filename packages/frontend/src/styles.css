@@ -604,6 +604,59 @@ select option {
   margin-left: auto;
 }
 
+/* Faucet info bar */
+.faucet-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  font-size: 0.7rem;
+}
+
+.faucet-address {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.faucet-address:hover {
+  color: var(--text-primary);
+}
+
+.network-balance {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.network-balance.low {
+  color: var(--warning);
+  text-shadow: 0 0 8px rgba(255, 170, 0, 0.3);
+}
+
+.low-indicator {
+  font-size: 0.8rem;
+}
+
+.low-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 4px;
+  opacity: 0.8;
+}
+
 /* Footer */
 .footer {
   text-align: center;
@@ -612,6 +665,25 @@ select option {
   border-top: 1px solid var(--border);
   font-size: 0.65rem;
   color: var(--text-muted);
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.footer-links a {
+  color: var(--text-muted);
+  transition: color var(--transition);
+  display: inline-flex;
+  align-items: center;
+}
+
+.footer-links a:hover {
+  color: var(--text-primary);
 }
 
 /* Utility */
@@ -647,5 +719,11 @@ select option {
     width: 100%;
     margin-left: 34px;
     margin-top: 4px;
+  }
+
+  .faucet-info {
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
   }
 }

@@ -16,5 +16,14 @@ export function loadNetworks(): NetworkConfig[] {
       enabled: true,
       dispensationWei: "100000000000000000",
     },
+    {
+      id: "base-sepolia",
+      name: "Base Sepolia",
+      chainId: 84532,
+      rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",
+      explorerUrl: "https://sepolia.basescan.org",
+      enabled: true,
+      dispensationWei: "100000000000000000",
+    },
   ];
 }

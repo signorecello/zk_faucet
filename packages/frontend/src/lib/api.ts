@@ -105,6 +105,10 @@ class ApiClient {
     return this.request<StatusResponse>(`/status/${encodeURIComponent(claimId)}`);
   }
 
+  async getHealth(): Promise<HealthResponse> {
+    return this.request<HealthResponse>('/health');
+  }
+
   async getCircuitArtifact(moduleId: string): Promise<any> {
     const res = await fetch(`${this.baseUrl}/circuits/${moduleId}/artifact.json`);
     if (!res.ok) {
@@ -116,6 +120,14 @@ class ApiClient {
     }
     return res.json();
   }
+}
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded';
+  uptime: number;
+  version: string;
+  faucetAddress: string;
+  balances: Record<string, string>;
 }
 
 export class ApiRequestError extends Error {

@@ -4,7 +4,7 @@
 
 A privacy-preserving testnet faucet that uses zero-knowledge storage proofs to verify ETH balances on a configurable origin chain without revealing user identity.
 
-Users prove they hold sufficient ETH on the origin chain (configured via `VITE_ORIGIN_CHAINID`) by generating a ZK proof over their account's Merkle-Patricia Trie (MPT) inclusion in the state trie. The faucet server verifies the proof and sends testnet ETH to a completely separate recipient address. At no point does the server learn which address generated the proof.
+Users prove they hold sufficient ETH on the origin chain (configured via `ORIGIN_CHAINID`) by generating a ZK proof over their account's Merkle-Patricia Trie (MPT) inclusion in the state trie. The faucet server verifies the proof and sends testnet ETH to a completely separate recipient address. At no point does the server learn which address generated the proof.
 
 ## Table of Contents
 
@@ -14,6 +14,7 @@ Users prove they hold sufficient ETH on the origin chain (configured via `VITE_O
 - [Security Model](#security-model)
 - [Getting Started](#getting-started)
 - [Running the Project](#running-the-project)
+- [Deployment](#deployment)
 - [Testing](#testing)
 - [API Reference](#api-reference)
 - [Circuit Details](#circuit-details)
@@ -32,40 +33,41 @@ Users prove they hold sufficient ETH on the origin chain (configured via `VITE_O
    - A deterministic nullifier derived from the public key and current epoch.
 3. The proof is submitted to the faucet server along with the desired testnet recipient address.
 4. The server verifies the proof cryptographically (UltraHonk via Barretenberg WASM), checks the nullifier has not been spent in this epoch, validates the state root is recent (within 256 blocks), and dispatches testnet ETH.
-5. The nullifier prevents the same key from claiming more than once per epoch (1 week), but the server never learns which mainnet address was used.
+5. The nullifier prevents the same key from claiming more than once per epoch, but the server never learns which mainnet address was used.
 
 **Privacy guarantees:** The address, public key, signature, account balance, and MPT proof data are all private circuit inputs. Only the nullifier, epoch, minimum balance threshold, and state root are public. The nullifier is a Poseidon2 hash of the public key coordinates and epoch -- it cannot be reversed to recover the address.
 
 ## Architecture
 
 ```
-                          +------------------+
-                          |    Frontend      |
-                          |  (Vanilla TS)    |
-                          |  MetaMask wallet |
-                          +--------+---------+
-                                   |
-                          signs domain message,
-                          submits proof + recipient
-                                   |
-                                   v
-                          +------------------+        +------------------+
-                          |   Hono Server    | -----> | Testnet RPC      |
-                          |                  |        | (Sepolia, etc.)  |
-                          |  - Proof verify  |        +------------------+
-                          |  - Nullifier DB  |
-                          |  - State root    |
-                          |    oracle        |
-                          +--------+---------+
-                                   |
-                          validates state root
-                          against recent L1 blocks
-                                   |
-                                   v
-                          +------------------+
-                          |  Ethereum L1 RPC |
-                          |  (state roots)   |
-                          +------------------+
+                     +-------------------+
+                     |     Frontend      |
+                     |    (React 19)     |
+                     |  Reown AppKit     |
+                     |  bb.js proving    |
+                     +--------+----------+
+                              |
+                     signs domain message,
+                     submits proof + recipient
+                              |
+                              v
++----------+        +------------------+        +------------------+
+|  Caddy   | -----> |   Hono Server    | -----> | Testnet RPC      |
+|  (TLS)   |        |                  |        | (Sepolia, etc.)  |
++----------+        |  - Proof verify  |        +------------------+
+                     |  - Nullifier DB  |
+                     |  - State root    |
+                     |    oracle        |
+                     +--------+---------+
+                              |
+                     validates state root
+                     against recent L1 blocks
+                              |
+                              v
+                     +------------------+
+                     |  Ethereum L1 RPC |
+                     |  (state roots)   |
+                     +------------------+
 
 
 ZK Proof Generation (client-side):
@@ -87,9 +89,9 @@ ZK Proof Generation (client-side):
 
 | Package | Description |
 |---------|-------------|
-| `packages/circuits` | Noir ZK circuit (`eth_balance`) with custom Ethereum MPT verification library |
+| `packages/circuits` | Noir ZK circuit (`eth_balance`) with vendored `noir-lang/eth-proofs` for MPT verification |
 | `packages/server` | Hono API server with real Barretenberg proof verification (Bun runtime) |
-| `packages/frontend` | Vanilla TypeScript/CSS SPA with wallet integration (Vite build, wagmi/core) |
+| `packages/frontend` | React 19 SPA (Vite + Reown AppKit + wagmi v3 for wallet, bb.js for in-browser proving) |
 | `packages/e2e` | End-to-end integration tests with in-process test server |
 
 ### Claim Flow (Server-Side)
@@ -100,7 +102,8 @@ ZK Proof Generation (client-side):
 4. Decode the hex proof and verify it with the Barretenberg UltraHonk WASM backend.
 5. Attempt to record the nullifier via atomic `INSERT OR IGNORE` in SQLite (race-safe).
 6. Dispatch testnet ETH via the `FundDispatcher` (viem wallet client).
-7. Record the claim status and return the transaction hash.
+7. If dispatch fails, the nullifier is automatically rolled back (`unspend()`) so the user can retry.
+8. Record the claim in the persistent `ClaimStore` (SQLite) and return the transaction hash.
 
 ## ZK Circuit
 
@@ -128,11 +131,11 @@ Asserts that `keccak256(pubkey_x || pubkey_y)[12..32] == address`, ensuring the 
 
 ### Constraint 4: MPT Account Proof Verification
 
-Verifies a Merkle-Patricia Trie inclusion proof against the public `state_root`, walking branch and extension nodes to the leaf, then extracts the account's RLP-encoded balance. This uses a custom Ethereum library written in Noir (`packages/circuits/lib/ethereum/`).
+Verifies a Merkle-Patricia Trie inclusion proof against the public `state_root`, walking branch and extension nodes to the leaf, then extracts the account's RLP-encoded balance. This uses the vendored `noir-lang/eth-proofs` library.
 
 ### Constraint 5: Balance Check
 
-Asserts `verified_balance >= min_balance` where `min_balance` is a public input (configured via `MIN_BALANCE_WEI` / `VITE_MIN_BALANCE_WEI`).
+Asserts `verified_balance >= min_balance` where `min_balance` is a public input (configured via `MIN_BALANCE_WEI`).
 
 ### Constraint 6: Nullifier Derivation
 
@@ -187,6 +190,7 @@ Computes `nullifier = Poseidon2(pubkey_x_field, pubkey_y_field, epoch)` and asse
 - **Unconstrained message hash (CRITICAL, Fixed):** The `message_hash` was previously a private input, allowing any existing ECDSA signature to be repurposed. Now computed in-circuit from the epoch.
 - **Verifier stub in production (CRITICAL, Fixed):** The server previously had a stub verifier. Now uses real UltraHonk verification via `@aztec/bb.js`.
 - **Public input field count mismatch (HIGH, Fixed):** `encodePublicInputs` now correctly produces 35 fields (32 state_root bytes + epoch + minBalance + nullifier).
+- **X-Forwarded-For spoofing (MEDIUM, Fixed):** Rate limiter now reads the rightmost IP from `X-Forwarded-For` (added by Caddy), not the leftmost (client-controlled). In production, Caddy is the only proxy and the app is on an internal Docker network.
 
 See `SECURITY.md` for the full audit findings, including accepted risks and their rationale.
 
@@ -195,8 +199,9 @@ See `SECURITY.md` for the full audit findings, including accepted risks and thei
 ### Prerequisites
 
 - **[Bun](https://bun.sh/)** >= 1.1 -- package manager, runtime, test runner, bundler
-- **[Nargo](https://noir-lang.org/docs/getting_started/installation/)** >= 1.0.0-beta -- Noir compiler (for circuit compilation)
+- **[Nargo](https://noir-lang.org/docs/getting_started/installation/)** >= 1.0.0-beta.18 -- Noir compiler (for circuit compilation)
 - **An Ethereum L1 RPC URL** -- Alchemy, Infura, or any mainnet endpoint
+- **[Docker](https://docs.docker.com/get-docker/)** (optional) -- for containerized deployment
 
 ### Installation
 
@@ -208,39 +213,43 @@ bun install
 
 ### Environment Setup
 
-Each package has its own `.env` file. Copy the examples and fill in the required values:
+Shared configuration lives in the **root `.env`** (single source of truth). The server loads both root and local `.env` via `--env-file` flags. Vite reads the root `.env` via `envDir: '../..'`. VITE_ aliases use `$VAR` expansion to avoid duplication.
 
 ```bash
-cp .env.example .env                                # Frontend (VITE_* vars)
-cp packages/server/.env.example packages/server/.env  # Server
-cp packages/circuits/.env.example packages/circuits/.env  # Circuit testing
+cp .env.example .env                                    # Shared config + frontend aliases
+cp packages/server/.env.example packages/server/.env    # Server-specific secrets
+cp packages/circuits/.env.example packages/circuits/.env  # Circuit testing (optional)
 ```
 
-**Root `.env`** (frontend — Vite inlines `VITE_*` at build time):
+**Root `.env`** (shared config + frontend aliases):
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `VITE_ORIGIN_CHAINID` | **Yes** | Origin chain ID: `1` (mainnet), `11155111` (sepolia), `17000` (holesky) |
-| `VITE_MIN_BALANCE_WEI` | **Yes** | Minimum balance threshold in wei |
+| `ORIGIN_CHAINID` | **Yes** | Origin chain ID: `1` (mainnet), `11155111` (sepolia), `17000` (holesky) |
+| `MIN_BALANCE_WEI` | **Yes** | Minimum balance threshold in wei |
+| `EPOCH_DURATION` | No | Epoch duration in seconds (default: 604800 = 1 week) |
+| `ORIGIN_RPC_URL` | **Yes** | Origin chain RPC URL (for server state root verification) |
+| `VITE_ORIGIN_CHAINID` | auto | `$ORIGIN_CHAINID` (Vite alias) |
+| `VITE_MIN_BALANCE_WEI` | auto | `$MIN_BALANCE_WEI` (Vite alias) |
+| `VITE_EPOCH_DURATION` | auto | `$EPOCH_DURATION` (Vite alias) |
+| `VITE_REOWN_PROJECT_ID` | No | Reown project ID for WalletConnect (get from cloud.reown.com) |
 
-**`packages/server/.env`** (server-only, uses non-VITE_ names):
+**`packages/server/.env`** (server-specific only):
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ORIGIN_CHAINID` | **Yes** | -- | Origin chain ID (must match `ORIGIN_RPC_URL`) |
-| `MIN_BALANCE_WEI` | **Yes** | -- | Minimum balance threshold in wei |
-| `ORIGIN_RPC_URL` | **Yes** | -- | Origin chain RPC URL (for state root verification) |
 | `FAUCET_PRIVATE_KEY` | **Yes** | -- | 0x-prefixed private key of the wallet holding testnet funds |
 | `PORT` | No | `3000` | Server port |
 | `HOST` | No | `0.0.0.0` | Bind address |
 | `LOG_LEVEL` | No | `info` | Pino log level: debug, info, warn, error |
 | `RATE_LIMIT_MAX` | No | `10` | Max requests per IP per window |
 | `RATE_LIMIT_WINDOW_MS` | No | `60000` | Rate limit window in ms |
-| `DISPENSATION_AMOUNT` | No | `0.1` | Testnet ETH to send per claim (in ETH) |
-| `EPOCH_DURATION` | No | `604800` | Epoch length in seconds (default: 1 week) |
-| `DB_PATH` | No | `./data/nullifiers.db` | SQLite database path for nullifiers |
+| `DB_PATH` | No | `./data/nullifiers.db` | SQLite database path for nullifiers and claims |
+| `ALLOWED_ORIGINS` | No | `*` | Comma-separated CORS origins |
+| `SEPOLIA_RPC_URL` | No | (public RPC) | Sepolia RPC URL |
+| `VK_CACHE_PATH` | No | (next to circuit artifact) | Path to cache the verification key |
 
-**`packages/circuits/.env`** (circuit testing — can target a different chain than server/frontend):
+**`packages/circuits/.env`** (circuit testing -- can target a different chain than server/frontend):
 
 | Variable | Required | Description |
 |----------|---------|-------------|
@@ -264,19 +273,12 @@ This produces `target/eth_balance.json`, required by the server for proof verifi
 
 ```bash
 bun install
-cp .env.example .env                                  # Frontend env
-cp packages/server/.env.example packages/server/.env    # Server env
-cp packages/circuits/.env.example packages/circuits/.env  # Circuit env
+cp .env.example .env
+cp packages/server/.env.example packages/server/.env
 # Edit each .env with required values
-bun run dev
+bun run build       # Compile circuits + build frontend
+bun run dev         # Start server (watch mode)
 # Open http://localhost:3000
-```
-
-Or use the guided setup script:
-
-```bash
-bash scripts/setup.sh
-bun run dev
 ```
 
 ### Development Mode
@@ -287,32 +289,105 @@ Build the frontend and start the server with file watching:
 bun run dev
 ```
 
-This runs `bun run build:frontend` (Vite build to `packages/frontend/dist/`) followed by the server in watch mode. The server serves the frontend SPA from `packages/frontend/dist/` on `/`.
-
-### Production
-
-```bash
-cd packages/server
-bun --env-file=./.env src/index.ts
-```
+This runs the server in watch mode. The server serves the frontend SPA from `packages/frontend/dist/` with a catch-all route for client-side routing.
 
 ### Individual Packages
 
 ```bash
-# Frontend build (one-time)
-cd packages/frontend && bun run build
+# Full build (circuits + frontend)
+bun run build
 
-# Frontend build (watch mode)
-cd packages/frontend && bun run dev
+# Frontend build only
+bun run build:frontend
 
 # Server only (watch mode)
-cd packages/server && bun --env-file=./.env --watch src/index.ts
+cd packages/server && bun --env-file=../../.env --env-file=./.env --watch src/index.ts
+```
 
+## Deployment
+
+### Docker Compose (Recommended)
+
+The project includes a production-ready Docker setup with Caddy as a reverse proxy for automatic TLS.
+
+```
+Internet --> Caddy (:443/:80) --> Bun server (:3000) --> SQLite
+                                       |
+                                 serves frontend dist/
+                                 + API endpoints
+```
+
+#### Files
+
+| File | Purpose |
+|------|---------|
+| `Dockerfile` | Multi-stage build: nargo + bun builder, slim bun runtime |
+| `docker-compose.yml` | Two services: `app` (Bun server) + `caddy` (reverse proxy/TLS) |
+| `Caddyfile` | Auto-TLS via Let's Encrypt, security headers |
+| `.dockerignore` | Excludes .env files, node_modules, build artifacts |
+
+#### Local Development with Docker
+
+```bash
+docker compose up -d --build
+# App available at http://localhost:3000 (direct)
+# Also at https://localhost (via Caddy with self-signed cert)
+```
+
+#### Production Deployment
+
+```bash
+# On the server
+git clone <your-repo> /opt/zk-faucet
+cd /opt/zk-faucet
+
+# Create production .env files
+cat > .env << 'EOF'
+DOMAIN=yourdomain.com
+ORIGIN_CHAINID=1
+MIN_BALANCE_WEI=1000000000000000
+EPOCH_DURATION=3600
+ORIGIN_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+VITE_REOWN_PROJECT_ID=your_project_id
+ALLOWED_ORIGINS=https://yourdomain.com
+EOF
+
+cat > packages/server/.env << 'EOF'
+FAUCET_PRIVATE_KEY=0x...
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
+EOF
+
+chmod 600 .env packages/server/.env
+
+# Build and start
+docker compose up -d --build
+# Watch logs (first start takes ~80s for VK generation)
+docker compose logs -f
+```
+
+#### What Caddy Provides
+
+- **Auto TLS** via Let's Encrypt (HTTP-01 challenge)
+- **HTTP -> HTTPS redirect** (automatic)
+- **Security headers:** HSTS, X-Content-Type-Options (nosniff), X-Frame-Options (DENY), Referrer-Policy
+- **Trusted X-Forwarded-For:** Caddy sets the real client IP; the app reads the rightmost entry
+
+#### Persistence
+
+- **SQLite database** (`nullifiers.db` + claims) persists in a Docker named volume (`db-data`)
+- **Verification key cache** (`eth_balance.vk.bin`) also in the volume -- first startup takes ~80s to generate, subsequent restarts are instant
+
+#### Updating
+
+```bash
+cd /opt/zk-faucet
+git pull
+docker compose up -d --build
 ```
 
 ## Testing
 
-135 tests total across all packages (Bun tests; circuit tests run separately via Nargo).
+189 tests across all packages (server, frontend, e2e). Circuit tests run separately via Nargo.
 
 ### Run All Tests
 
@@ -323,15 +398,17 @@ bun run test
 ### Run Tests by Package
 
 ```bash
-# Server unit tests (66 tests)
+# Server unit tests (83 pass, 3 skip)
 cd packages/server && bun test
 
-# Circuit tests via Nargo (14 tests across 2 crates)
-cd packages/circuits/bin/eth_balance && nargo test
-cd packages/circuits/lib/ethereum && nargo test
+# Frontend tests (29 pass via bun; full suite requires vitest)
+cd packages/frontend && bun test
 
-# End-to-end tests (69 tests)
+# End-to-end tests (77 pass)
 cd packages/e2e && bun test
+
+# Circuit tests via Nargo (7 tests)
+cd packages/circuits/bin/eth_balance && nargo test
 ```
 
 ### Convenience Scripts
@@ -365,6 +442,7 @@ E2E test files cover:
 | `cross-module-isolation.test.ts` | Module registry separation |
 | `rate-limiting.test.ts` | Per-IP rate limiting |
 | `frontend-api.test.ts` | Frontend API contract verification |
+| `domain-message.test.ts` | Domain message format and epoch padding |
 
 ### Generating Proof Fixtures
 
@@ -437,12 +515,12 @@ All hex fields must be 0x-prefixed. `recipient` must be a valid 40-character Eth
 | `INVALID_MODULE` | 400 | Unknown `moduleId` |
 | `INVALID_PROOF` | 400 | Proof is empty or Barretenberg verification failed |
 | `ALREADY_CLAIMED` | 409 | Nullifier already spent in this epoch |
-| `DISPATCH_FAILED` | 500 | Failed to send testnet transaction |
+| `DISPATCH_FAILED` | 500 | Failed to send testnet transaction (nullifier is rolled back) |
 | `RATE_LIMITED` | 429 | Too many requests from this IP |
 
 ### GET /status/:claimId
 
-Check the status of a previous claim.
+Check the status of a previous claim. Claims are persisted in SQLite and survive server restarts.
 
 **Response (200):**
 
@@ -502,13 +580,13 @@ List available testnet networks and their dispensation amounts.
 
 ### GET /circuits/:moduleId/artifact.json
 
-Download the compiled Noir circuit artifact for client-side proof generation. Returns the full JSON artifact produced by `nargo compile`.
+Download the compiled Noir circuit artifact for client-side proof generation. Returns the full JSON artifact produced by `nargo compile`. Responses include `ETag` and `Cache-Control: public, max-age=86400, immutable` headers for efficient caching.
 
 **Error:** Returns 404 if the module or artifact does not exist. Run `nargo compile` to generate the artifact.
 
 ### GET /health
 
-Health check endpoint.
+Health check endpoint with faucet wallet balance monitoring.
 
 **Response (200):**
 
@@ -516,26 +594,22 @@ Health check endpoint.
 {
   "status": "ok",
   "uptime": 123456,
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "balances": {
+    "sepolia": "1234567890123456789"
+  }
 }
 ```
+
+Status is `"ok"` if all enabled networks have balance >= 10x dispensation amount, or `"degraded"` if any balance is low or a check fails.
 
 ## Circuit Details
 
 ### Ethereum Library
 
-The circuit uses a custom Noir library at `packages/circuits/lib/ethereum/src/` that implements full Ethereum state trie verification:
+The circuit uses the vendored `noir-lang/eth-proofs` library at `packages/circuits/vendor/eth-proofs/` with visibility patches (`pub(crate)` -> `pub`) for accessing internal types.
 
-| Module | Purpose |
-|--------|---------|
-| `mpt.nr` | Full Merkle-Patricia Trie proof verification (branch, extension, and leaf nodes) |
-| `account.nr` | Account proof verification and balance extraction from RLP-encoded account state |
-| `rlp.nr` | RLP decoding (single bytes, short/long strings, short/long lists) |
-| `bytes.nr` | Byte manipulation utilities (nibble conversion, left/right padding) |
-| `fragment.nr` | Zero-copy byte array slicing with bounds checking |
-| `arrays.nr` | Array comparison utilities |
-
-This library has no external dependencies beyond `keccak256`. It was written from scratch because vlayer (the primary Noir MPT library) was not ported to nargo 1.0.0 at the time of development.
+API: `verify_account(address, account, proof_input, state_root)` verifies the Account struct matches the MPT proof.
 
 ### Constants
 
@@ -546,10 +620,10 @@ This library has no external dependencies beyond `keccak256`. It was written fro
 | `MAX_ACCOUNT_STATE_LEN` | 110 bytes | Maximum size of an RLP-encoded account state |
 | `MAX_ACCOUNT_DEPTH` | 10 | Maximum MPT proof depth (internal nodes only) |
 | `MAX_PREFIXED_KEY_LEN` | 66 bytes | Left-padded keccak256(address) key buffer |
-| `MIN_BALANCE_WEI` | (from env) | Minimum balance threshold (per-package .env) |
-| `EPOCH_DURATION_SECONDS` | 604,800 (1 week) | Default epoch length |
 | `MAX_STATE_ROOT_AGE_BLOCKS` | 256 | Maximum age of accepted state roots |
 | `EPOCH_PAD_LENGTH` | 10 | Digits used for zero-padded epoch in domain message |
+
+`MIN_BALANCE_WEI` and `EPOCH_DURATION` are configurable via environment variables, not circuit constants.
 
 ### Proof Generation Benchmarks
 
@@ -559,7 +633,6 @@ This library has no external dependencies beyond `keccak256`. It was written fro
 | Proof size | ~16 KB |
 | Public inputs | 35 fields (32 state_root bytes + epoch + min_balance + nullifier) |
 | Backend | UltraHonk via `@aztec/bb.js` |
-| Circuit tests | 14 nargo tests (7 eth_balance + 7 ethereum lib) |
 
 ### Circuit Commands
 
@@ -578,7 +651,7 @@ bun run eth_balance:execute
 bun run eth_balance:prove
 
 # Run circuit unit tests
-nargo test
+cd bin/eth_balance && nargo test
 ```
 
 There is also a standalone MPT proof test circuit at `packages/circuits/test/ethereum_test/`:
@@ -594,10 +667,6 @@ bun run storage_proof_test:execute     # Execute test circuit
 
 Noir provides a higher-level language with native support for complex data structures, generics, and bounded loops. The MPT verification logic requires manipulating variable-length RLP data, recursive node traversal, and conditional branch/extension/leaf handling -- all of which are more naturally expressed in Noir than in Circom's R1CS constraint language.
 
-### Why a Custom MPT Library
-
-The existing Noir MPT implementations (primarily vlayer) were not ported to nargo 1.0.0 at the time of development. The custom library in `packages/circuits/lib/ethereum/src/` provides full MPT proof verification with branch, extension, and leaf node support, RLP decoding, and account balance extraction -- all with no external dependencies beyond `keccak256`.
-
 ### Why Poseidon2 for Nullifiers
 
 Poseidon2 is a ZK-friendly hash function that is efficient inside arithmetic circuits (far cheaper than keccak256 in constraint count). The nullifier is `Poseidon2(pubkey_x, pubkey_y, epoch)`, using the **public key** as input rather than the signature. This ensures the nullifier is deterministic for a given key and epoch, regardless of ECDSA nonce randomness. This approach avoids the need for the PLUME protocol (verifiably deterministic signatures), which is not widely supported.
@@ -612,7 +681,7 @@ The epoch is zero-padded to 10 digits in the domain message (e.g., `"0000002928"
 
 ### Real Server Verification
 
-The server uses real UltraHonk verification via `@aztec/bb.js`, not a mock verifier. The compiled circuit artifact (`eth_balance.json`) is loaded lazily and cached as a singleton `UltraHonkBackend` instance. No mock verifier escape hatch exists in production code.
+The server uses real UltraHonk verification via `@aztec/bb.js`, not a mock verifier. The verification key is generated once on first startup (~80s), cached to disk (at `VK_CACHE_PATH`), and loaded instantly on subsequent restarts. The lightweight `UltraHonkVerifierBackend` is used for verification (~200ms per proof), not the heavy `UltraHonkBackend`.
 
 ### Pluggable Proof Modules
 
@@ -638,7 +707,15 @@ The nullifier is `poseidon2(pubkey_x, pubkey_y, epoch)` using the **recovered pu
 
 ### Race-Safe Nullifier Store
 
-The `NullifierStore` uses SQLite with `INSERT OR IGNORE` for atomic nullifier recording. Concurrent claims with the same nullifier result in exactly one success -- the first insertion wins, and subsequent attempts return `changes === 0`. The database uses WAL journaling mode and a 5-second busy timeout.
+The `NullifierStore` uses SQLite with `INSERT OR IGNORE` for atomic nullifier recording. Concurrent claims with the same nullifier result in exactly one success -- the first insertion wins, and subsequent attempts return `changes === 0`. The database uses WAL journaling mode and a 5-second busy timeout. If fund dispatch fails after recording a nullifier, the nullifier is rolled back via `unspend()` so the user can retry.
+
+### Nullifier Pruning
+
+Old nullifiers are automatically pruned every hour. Nullifiers from epochs more than 2 epochs old are deleted, keeping the SQLite database from growing unboundedly.
+
+### Graceful Shutdown
+
+The server handles `SIGTERM` and `SIGINT` signals for clean container shutdown: stops the state root oracle, clears intervals, closes the SQLite database, and stops the HTTP server.
 
 ### Why Not Fully On-Chain
 
@@ -668,10 +745,6 @@ An observer could correlate proof submission times with on-chain activity to dea
 
 At the epoch boundary, a user could claim in the last seconds of epoch N and the first seconds of epoch N+1 using different nullifiers. This is by design -- epochs represent weekly windows, and the boundary edge case allows at most 2 claims in quick succession.
 
-### X-Forwarded-For Spoofing
-
-The IP-based rate limiter uses `X-Forwarded-For`, which can be spoofed if the server is not behind a trusted reverse proxy. In production, deploy behind nginx or Cloudflare.
-
 ### MPT Depth Cap
 
 The circuit limits MPT proof depth to 10 nodes. The current Ethereum state trie depth is typically 7-8 for account proofs, so this provides sufficient headroom. The constant can be increased in a future circuit version if needed.
@@ -679,10 +752,6 @@ The circuit limits MPT proof depth to 10 nodes. The current Ethereum state trie 
 ### BN254 Field Truncation
 
 Converting 32-byte public key coordinates to BN254 field elements causes reduction modulo the BN254 prime. The probability of a collision is astronomically low (~2^{-2}) and negligible for a testnet faucet.
-
-### Nullifier Store Growth
-
-The SQLite nullifier store grows indefinitely. Old nullifiers from past epochs can be safely pruned as a future operational improvement.
 
 ### Cross-Faucet Nullifier Reuse
 
@@ -695,18 +764,17 @@ The same public key produces the same nullifier for the same epoch across differ
 1. Create a new directory under `packages/server/src/lib/modules/<module-name>/`.
 2. Implement the `ProofModule` interface in a `module.ts` file (see `eth-balance/module.ts` for reference).
 3. Implement proof verification in a `verifier.ts` file.
-4. Define constants in a `constants.ts` file.
-5. Register the module in `packages/server/src/index.ts`:
+4. Register the module in `packages/server/src/index.ts`:
    ```typescript
    registry.register(new YourNewModule(oracle, options));
    ```
-6. Write the corresponding Noir circuit under `packages/circuits/bin/<circuit-name>/`.
-7. Add unit tests to `packages/server/test/` and E2E tests to `packages/e2e/test/`.
+5. Write the corresponding Noir circuit under `packages/circuits/bin/<circuit-name>/`.
+6. Add unit tests to `packages/server/test/` and E2E tests to `packages/e2e/test/`.
 
 ### Modifying the Circuit
 
 1. Edit the circuit source at `packages/circuits/bin/eth_balance/src/main.nr`.
-2. Run circuit tests: `cd packages/circuits && nargo test`.
+2. Run circuit tests: `cd packages/circuits/bin/eth_balance && nargo test`.
 3. Recompile: `cd packages/circuits/bin/eth_balance && nargo compile`.
 4. Regenerate the Prover.toml if inputs changed: `cd packages/circuits && bun run eth_balance:generate`.
 5. Test witness execution: `cd packages/circuits && bun run eth_balance:execute`.
@@ -746,12 +814,15 @@ The server reads this file at startup. Ensure the faucet wallet (`FAUCET_PRIVATE
 | [Hono](https://hono.dev) | HTTP framework (server) |
 | [Noir](https://noir-lang.org) | ZK circuit language |
 | [Barretenberg / bb.js](https://github.com/AztecProtocol/aztec-packages) | UltraHonk ZK proof backend (WASM) |
-| [Vite](https://vite.dev) | Frontend build tool and dev server |
-| [@wagmi/core](https://wagmi.sh) | Framework-agnostic wallet integration (frontend) |
+| [Vite](https://vite.dev) | Frontend build tool |
+| [React 19](https://react.dev) | Frontend UI framework |
+| [Reown AppKit](https://reown.com) | Wallet modal (MetaMask, WalletConnect, Coinbase) |
+| [wagmi v3](https://wagmi.sh) | React hooks for wallet + chain interaction |
 | [viem](https://viem.sh) | Ethereum client library (RPC, signing, transactions) |
-| [SQLite (bun:sqlite)](https://bun.sh/docs/api/sqlite) | Nullifier persistence |
+| [SQLite (bun:sqlite)](https://bun.sh/docs/api/sqlite) | Nullifier + claim persistence |
 | [pino](https://getpino.io) | Structured JSON logging |
 | [valibot](https://valibot.dev) | Schema validation for API inputs |
+| [Docker](https://docker.com) + [Caddy](https://caddyserver.com) | Containerized deployment with auto-TLS |
 
 ## License
 
