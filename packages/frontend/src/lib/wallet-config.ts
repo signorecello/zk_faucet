@@ -64,22 +64,24 @@ const wagmiAdapter = new WagmiAdapter({
   networks,
 });
 
+const prefersDark = globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+
 createAppKit({
   adapters: [wagmiAdapter],
   projectId,
   networks,
   metadata: {
-    name: 'zk_faucet',
-    description: 'Privacy-preserving testnet faucet',
-    url: globalThis.location?.origin ?? 'https://zkfaucet.xyz',
+    name: 'a better faucet',
+    description: 'Privacy-preserving testnet faucet powered by ZK proofs',
+    url: globalThis.location?.origin ?? 'https://abetterfaucet.xyz',
     icons: [],
   },
-  themeMode: 'dark',
+  themeMode: prefersDark ? 'dark' : 'light',
   themeVariables: {
-    '--w3m-accent': '#00ff88',
-    '--w3m-color-mix': '#0a0a0a',
+    '--w3m-accent': '#4a7dfc',
+    '--w3m-color-mix': prefersDark ? '#0f1117' : '#ffffff',
     '--w3m-color-mix-strength': 40,
-    '--w3m-font-family': "'JetBrains Mono', monospace",
+    '--w3m-font-family': "'Inter', system-ui, sans-serif",
     '--w3m-border-radius-master': '2px',
   },
 });

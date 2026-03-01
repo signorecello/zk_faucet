@@ -1,4 +1,4 @@
-// zk_faucet frontend — React entry point
+// a better faucet — React entry point
 
 // Polyfill Buffer for browser (required by @aztec/bb.js WASM internals)
 import { Buffer } from 'buffer';
