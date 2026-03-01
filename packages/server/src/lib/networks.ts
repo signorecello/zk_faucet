@@ -25,5 +25,14 @@ export function loadNetworks(): NetworkConfig[] {
       enabled: true,
       dispensationWei: "100000000000000000",
     },
+    {
+      id: "arbitrum-sepolia",
+      name: "Arbitrum Sepolia",
+      chainId: 421614,
+      rpcUrl: process.env.ARBITRUM_SEPOLIA_RPC_URL || "https://sepolia-rollup.arbitrum.io/rpc",
+      explorerUrl: "https://sepolia.arbiscan.io",
+      enabled: true,
+      dispensationWei: "100000000000000000",
+    },
   ];
 }

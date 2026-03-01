@@ -1,5 +1,5 @@
 import type { Chain } from "viem";
-import { mainnet, base } from "viem/chains";
+import { mainnet, base, arbitrum } from "viem/chains";
 
 export interface OriginChainConfig {
   chainId: number;
@@ -24,6 +24,13 @@ export function loadOriginChains(): OriginChainConfig[] {
       chain: base,
       rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org",
       blockTimeMs: 2_000,
+    },
+    {
+      chainId: 42161,
+      name: "Arbitrum",
+      chain: arbitrum,
+      rpcUrl: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
+      blockTimeMs: 250,
     },
   ];
 }

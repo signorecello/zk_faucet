@@ -1,3 +1,4 @@
+import { useState, useCallback, useEffect } from 'react';
 import { useDisconnect, useBalance, useSwitchChain } from 'wagmi';
 import { useAppKit, useAppKitAccount } from '@reown/appkit/react';
 import { formatEther } from 'viem';
@@ -19,7 +20,11 @@ interface ConnectStepProps {
   onContinue: () => void;
 }
 
-function ChainBalance({ chainId, minBalance }: { chainId: number; minBalance: bigint }) {
+function ChainBalance({ chainId, minBalance, onBalanceLoaded }: {
+  chainId: number;
+  minBalance: bigint;
+  onBalanceLoaded?: (chainId: number, sufficient: boolean) => void;
+}) {
   const { address } = useAppKitAccount();
   const { data: balanceData } = useBalance({
     address: address as `0x${string}` | undefined,
@@ -29,6 +34,12 @@ function ChainBalance({ chainId, minBalance }: { chainId: number; minBalance: bi
   const balance = balanceData?.value ?? null;
   const sufficient = balance !== null && balance >= minBalance;
   const balStr = balance !== null ? formatBalance(balance) : '...';
+
+  useEffect(() => {
+    if (balance !== null) {
+      onBalanceLoaded?.(chainId, sufficient);
+    }
+  }, [balance, sufficient, chainId, onBalanceLoaded]);
 
   return (
     <span className={`wallet-balance ${balance !== null ? (sufficient ? 'sufficient' : 'insufficient') : ''}`}>
@@ -45,19 +56,14 @@ export function ConnectStep({ modules, selectedModuleId, onModuleChange, onConti
 
   const originModules = modules.filter((m) => m.originChainId != null);
 
-  // Check default chain balance (first module or chain 1)
-  const defaultChainId = originModules[0]?.originChainId ?? 1;
-  const { data: defaultBalanceData } = useBalance({
-    address: address as `0x${string}` | undefined,
-    chainId: defaultChainId,
-  });
-
-  // Check second chain balance if available
-  const secondChainId = originModules[1]?.originChainId;
-  const { data: secondBalanceData } = useBalance({
-    address: address as `0x${string}` | undefined,
-    chainId: secondChainId,
-  });
+  const [balanceStatus, setBalanceStatus] = useState<Map<number, boolean>>(new Map());
+  const handleBalanceLoaded = useCallback((chainId: number, sufficient: boolean) => {
+    setBalanceStatus(prev => {
+      const next = new Map(prev);
+      next.set(chainId, sufficient);
+      return next;
+    });
+  }, []);
 
   if (!isConnected || !address) {
     return (
@@ -81,9 +87,8 @@ export function ConnectStep({ modules, selectedModuleId, onModuleChange, onConti
   };
 
   const minBal = MIN_BALANCE_WEI;
-  const balances = [defaultBalanceData?.value, secondBalanceData?.value].filter((b): b is bigint => b != null);
-  const anyChainSufficient = balances.some((b) => b >= minBal);
-  const allLoaded = (defaultBalanceData !== undefined) && (secondChainId == null || secondBalanceData !== undefined);
+  const allLoaded = balanceStatus.size >= originModules.length;
+  const anyChainSufficient = [...balanceStatus.values()].some(Boolean);
 
   return (
     <div>
@@ -109,6 +114,7 @@ export function ConnectStep({ modules, selectedModuleId, onModuleChange, onConti
               <ChainBalance
                 chainId={mod.originChainId!}
                 minBalance={mod.minBalanceWei ? BigInt(mod.minBalanceWei) : minBal}
+                onBalanceLoaded={handleBalanceLoaded}
               />
             </button>
           ))}

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { createPublicClient, custom, type Chain } from 'viem';
-import { mainnet, base, sepolia, holesky } from 'viem/chains';
+import { mainnet, base, sepolia, holesky, arbitrum } from 'viem/chains';
 import { useAppKitProvider } from '@reown/appkit/react';
 import type { StorageProofResponse } from '../lib/api';
 
@@ -10,6 +10,7 @@ const VIEM_CHAIN_MAP: Record<number, Chain> = {
   8453: base,
   11155111: sepolia,
   17000: holesky,
+  42161: arbitrum,
 };
 
 type Status = 'idle' | 'fetching' | 'success' | 'error';

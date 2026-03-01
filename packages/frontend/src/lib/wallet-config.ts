@@ -1,7 +1,7 @@
 // Wagmi config + Reown AppKit setup for React hooks
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi';
 import { createAppKit } from '@reown/appkit/react';
-import { mainnet, sepolia, holesky, base } from '@reown/appkit/networks';
+import { mainnet, sepolia, holesky, base, arbitrum } from '@reown/appkit/networks';
 import type { AppKitNetwork } from '@reown/appkit/networks';
 
 /** Map chain IDs to AppKit network objects */
@@ -10,6 +10,7 @@ export const NETWORK_MAP: Record<number, AppKitNetwork> = {
   11155111: sepolia,
   17000: holesky,
   8453: base,
+  42161: arbitrum,
 };
 
 /** Default origin chain ID from build-time env var (defaults to Ethereum mainnet) */
