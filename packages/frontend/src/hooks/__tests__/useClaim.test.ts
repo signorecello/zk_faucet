@@ -118,17 +118,18 @@ describe('useClaim', () => {
 
     // Verify all mocks called in order
     expect(mockSignMessageAsync).toHaveBeenCalledOnce();
-    expect(mockFetchProof).toHaveBeenCalledWith(MOCK_ADDRESS);
-    expect(mockApi.getCircuitArtifact).toHaveBeenCalledWith('eth-balance');
+    expect(mockFetchProof).toHaveBeenCalledWith(MOCK_ADDRESS, 1);
+    expect(mockApi.getCircuitArtifact).toHaveBeenCalledWith('eth-balance:1');
     expect(mockProve).toHaveBeenCalledWith(
       { bytecode: '...' },
       mockStorageProof,
       '0xsig',
       MOCK_ADDRESS,
       4300,
+      10000000000000000n,
     );
     expect(mockApi.submitClaim).toHaveBeenCalledWith({
-      moduleId: 'eth-balance',
+      moduleId: 'eth-balance:1',
       proof: mockProofResult.proof,
       publicInputs: mockProofResult.publicInputs,
       recipient: MOCK_RECIPIENT,

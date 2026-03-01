@@ -14,11 +14,14 @@ export const mockNetwork: Network = {
 };
 
 export const mockModule: Module = {
-  id: 'eth-balance',
+  id: 'eth-balance:1',
   name: 'ETH Balance',
   description: 'Prove ETH balance on mainnet',
   currentEpoch: 4300,
   epochDurationSeconds: 604800,
+  originChainId: 1,
+  originChainName: 'Ethereum',
+  minBalanceWei: '10000000000000000',
 };
 
 export const mockStorageProof: StorageProofResponse = {

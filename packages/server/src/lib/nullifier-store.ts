@@ -49,17 +49,20 @@ export class NullifierStore {
    * Attempt to record a nullifier spend. Returns true if the nullifier
    * was successfully recorded (i.e., it was not already spent).
    * Returns false if the nullifier was already present.
+   *
+   * @param nullifierGroup — shared group key (e.g. "eth-balance") used for
+   *   cross-module dedup. Stored in the `module_id` DB column.
    */
-  spend(moduleId: string, nullifier: string, epoch: number, recipient: string): boolean {
-    const result = this.stmtSpend.run(moduleId, nullifier, epoch, recipient);
+  spend(nullifierGroup: string, nullifier: string, epoch: number, recipient: string): boolean {
+    const result = this.stmtSpend.run(nullifierGroup, nullifier, epoch, recipient);
     return result.changes > 0;
   }
 
   /**
-   * Check whether a nullifier has been spent for the given module.
+   * Check whether a nullifier has been spent for the given group.
    */
-  isSpent(moduleId: string, nullifier: string): boolean {
-    const row = this.stmtIsSpent.get(moduleId, nullifier);
+  isSpent(nullifierGroup: string, nullifier: string): boolean {
+    const row = this.stmtIsSpent.get(nullifierGroup, nullifier);
     return row !== null;
   }
 
@@ -67,8 +70,8 @@ export class NullifierStore {
    * Remove a previously recorded nullifier. Used to roll back
    * when fund dispatch fails after the nullifier was recorded.
    */
-  unspend(moduleId: string, nullifier: string): boolean {
-    const result = this.stmtUnspend.run(moduleId, nullifier);
+  unspend(nullifierGroup: string, nullifier: string): boolean {
+    const result = this.stmtUnspend.run(nullifierGroup, nullifier);
     return result.changes > 0;
   }
 

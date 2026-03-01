@@ -75,6 +75,10 @@ class MockFundDispatcher {
   async getBalance() {
     return 1000000000000000000n;
   }
+
+  getAddress() {
+    return "0x" + "00".repeat(20);
+  }
 }
 
 const noop = () => {};

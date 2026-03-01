@@ -690,7 +690,7 @@ select option {
 }
 
 .origin-balance-row.selected {
-  border-color: var(--primary);
+  border-color: var(--accent);
   background: rgba(102, 255, 178, 0.05);
 }
 
