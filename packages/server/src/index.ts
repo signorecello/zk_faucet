@@ -157,7 +157,10 @@ app.route("/health", createHealthRouter({ registry, dispatcher, startTime }));
 // --- Serve frontend static files ---
 const frontendDir = new URL("../../frontend/dist", import.meta.url).pathname;
 
-app.use("/assets/*", serveStatic({ root: frontendDir }));
+// Serve static files (assets, favicon, og-image, etc.) from the frontend dist directory.
+// serveStatic tries to match a file on disk first; if no file exists, it falls through
+// to the SPA catch-all below which returns index.html.
+app.use("*", serveStatic({ root: frontendDir }));
 
 app.get("*", async (c) => {
   const file = Bun.file(`${frontendDir}/index.html`);
