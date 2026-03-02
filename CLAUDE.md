@@ -160,21 +160,15 @@ React 19 SPA built with Vite. Wallet integration via Reown AppKit + wagmi v3.
 
 ## Environment Variables
 
-Shared config lives in the root `.env` (single source of truth). The server loads both root and local `.env` via `--env-file` flags in package.json. Vite reads root `.env` via `envDir: '../..'`. VITE_ aliases use `$VAR` expansion to avoid duplication.
+All config lives in a single root `.env`. The server loads it via `--env-file=../../.env` in package.json. Vite reads it via `envDir: '../..'` — only `VITE_*` vars reach the browser. Shared vars use the `VITE_` prefix so both server and frontend can read them directly (no aliases needed).
 
-### Root `.env` — shared config + frontend aliases
+### Root `.env` — all config (server + frontend)
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `MIN_BALANCE_WEI` | **Yes** | Minimum balance threshold in wei |
-| `EPOCH_DURATION` | No | Epoch duration in seconds (default: 604800 = 1 week) |
+| `VITE_MIN_BALANCE_WEI` | **Yes** | Minimum balance threshold in wei |
+| `VITE_EPOCH_DURATION` | No | Epoch duration in seconds (default: 604800 = 1 week) |
 | `VITE_ORIGIN_CHAINID` | No | Default origin chain for wallet connection (default: 1) |
-| `VITE_MIN_BALANCE_WEI` | auto | `$MIN_BALANCE_WEI` (Vite alias) |
-| `VITE_EPOCH_DURATION` | auto | `$EPOCH_DURATION` (Vite alias) |
 | `VITE_REOWN_PROJECT_ID` | No | Reown project ID for WalletConnect (get from cloud.reown.com) |
-
-### `packages/server/.env` — server-specific only
-| Variable | Required | Description |
-|----------|----------|-------------|
 | `FAUCET_PRIVATE_KEY` | **Yes** | 0x-prefixed private key holding testnet funds |
 | `PORT` | No | Server port (default: 3000) |
 | `HOST` | No | Server host (default: 0.0.0.0) |
@@ -183,9 +177,10 @@ Shared config lives in the root `.env` (single source of truth). The server load
 | `DB_PATH` | No | SQLite database path (default: `./data/nullifiers.db`) |
 | `ETHEREUM_RPC_URL` | No | Ethereum mainnet RPC URL (falls back to public RPC) |
 | `BASE_RPC_URL` | No | Base mainnet RPC URL (falls back to public RPC) |
+| `ARBITRUM_RPC_URL` | No | Arbitrum mainnet RPC URL (falls back to public RPC) |
 | `SEPOLIA_RPC_URL` | No | Sepolia RPC URL (falls back to public RPC) |
-
-The server loads root `.env` first (shared vars), then local `.env` (server-specific). Local can override shared if needed.
+| `BASE_SEPOLIA_RPC_URL` | No | Base Sepolia RPC URL (falls back to public RPC) |
+| `ARBITRUM_SEPOLIA_RPC_URL` | No | Arbitrum Sepolia RPC URL (falls back to public RPC) |
 
 ### `packages/circuits/.env` — self-contained (independent chain target)
 | Variable | Required | Description |
@@ -194,5 +189,3 @@ The server loads root `.env` first (shared vars), then local `.env` (server-spec
 | `MIN_BALANCE_WEI` | **Yes** | Minimum balance threshold in wei |
 | `ORIGIN_RPC_URL` | **Yes** | RPC URL for the target chain |
 | `PRIVATE_KEY` | **Yes** | Private key of account to prove balance for |
-
-See per-package `.env.example` files for all options.

@@ -5,7 +5,6 @@ export interface ServerConfig {
   logLevel: string;
   rateLimitMax: number;
   rateLimitWindowMs: number;
-  dispensationAmountEth: string;
   epochDuration: number;
   minBalanceWei: bigint;
   dbPath: string;
@@ -37,9 +36,8 @@ export function loadConfig(): ServerConfig {
     logLevel: optionalEnv("LOG_LEVEL", "info"),
     rateLimitMax: parseInt(optionalEnv("RATE_LIMIT_MAX", "10"), 10),
     rateLimitWindowMs: parseInt(optionalEnv("RATE_LIMIT_WINDOW_MS", "60000"), 10),
-    dispensationAmountEth: optionalEnv("DISPENSATION_AMOUNT", "0.1"),
-    epochDuration: parseInt(optionalEnv("EPOCH_DURATION", "604800"), 10),
-    minBalanceWei: BigInt(requireEnv("MIN_BALANCE_WEI")),
+    epochDuration: parseInt(optionalEnv("VITE_EPOCH_DURATION", "604800"), 10),
+    minBalanceWei: BigInt(requireEnv("VITE_MIN_BALANCE_WEI")),
     dbPath: optionalEnv("DB_PATH", "./data/nullifiers.db"),
     allowedOrigins: optionalEnv("ALLOWED_ORIGINS", "*")
       .split(",")
