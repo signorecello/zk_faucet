@@ -3,14 +3,12 @@ services:
     build:
       context: .
       args:
-        VITE_ORIGIN_CHAINID: ${ORIGIN_CHAINID:-1}
-        VITE_MIN_BALANCE_WEI: ${MIN_BALANCE_WEI:-1000000000000000}
-        VITE_EPOCH_DURATION: ${EPOCH_DURATION:-3600}
+        VITE_ORIGIN_CHAINID: ${VITE_ORIGIN_CHAINID:-1}
+        VITE_MIN_BALANCE_WEI: ${VITE_MIN_BALANCE_WEI:-1000000000000000}
+        VITE_EPOCH_DURATION: ${VITE_EPOCH_DURATION:-3600}
         VITE_REOWN_PROJECT_ID: ${VITE_REOWN_PROJECT_ID}
-        VITE_FAUCET_LOW_BALANCE_WEI: ${VITE_FAUCET_LOW_BALANCE_WEI:-500000000000000000}
     env_file:
       - .env
-      - packages/server/.env
     environment:
       - DB_PATH=/app/data/nullifiers.db
       - VK_CACHE_PATH=/app/data/eth_balance.vk.bin
