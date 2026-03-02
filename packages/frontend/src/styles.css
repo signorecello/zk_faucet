@@ -726,14 +726,7 @@ select option {
 }
 
 .footer-sponsor {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.footer-sponsor p {
+  margin-top: 8px;
   font-style: italic;
   opacity: 0.8;
 }

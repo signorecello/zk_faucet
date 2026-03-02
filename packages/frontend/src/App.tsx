@@ -67,10 +67,15 @@ export function App() {
               </a>
             </div>
             <p>built by <a href="https://linktr.ee/zkpedro" target="_blank" rel="noopener noreferrer" className="text-accent">zkpedro</a> with Noir, Hono and Bun</p>
-            <div className="footer-sponsor">
-              <p>like my work? sponsor it on GitHub</p>
-              <iframe src="https://github.com/sponsors/signorecello/button" title="Sponsor signorecello" height="32" width="114" style={{ border: 0, borderRadius: 6 }} />
-            </div>
+            <p className="footer-sponsor">
+              like my work?{' '}
+              <a href="https://github.com/sponsors/signorecello" target="_blank" rel="noopener noreferrer">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ verticalAlign: '-1px', marginRight: 3 }}>
+                  <path d="M4.25 2.5c-1.336 0-2.75 1.164-2.75 3 0 2.15 1.58 4.144 3.365 5.682A20.6 20.6 0 008 13.393a20.6 20.6 0 003.135-2.211C12.92 9.644 14.5 7.65 14.5 5.5c0-1.836-1.414-3-2.75-3-1.373 0-2.609.986-3.029 2.456a.749.749 0 01-1.442 0C6.859 3.486 5.623 2.5 4.25 2.5z"/>
+                </svg>
+                sponsor on GitHub
+              </a>
+            </p>
           </footer>
         </div>
       </QueryClientProvider>
